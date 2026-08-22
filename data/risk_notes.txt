@@ -1,0 +1,12 @@
+# Risk Notes — Sunrise Coffee Roasters LLC
+
+Underwriter notes from the first-pass review:
+
+- Revenue concentration: Café Amara alone contributes 38% of revenue. Loss of
+  this customer would cut the debt-service coverage ratio below 1.0x.
+- Thin credit history: the company has never borrowed from a scheduled
+  commercial bank, so there is no external repayment record.
+- The founders, Maya Krishnan and Anil Thomas, have no prior defaults and
+  carry personal credit scores above 780.
+- GreenLeaf Plantations reports that Sunrise Coffee Roasters has paid on time
+  for every delivery since 2019.
