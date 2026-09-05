@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>导入贷款申请</title>
+  <style>
+    body { font-family: sans-serif; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+    a { color: #0b57d0; }
+    label { display: block; margin-top: 1rem; font-weight: 600; }
+    input[type=text], input[type=file] { width: 100%; margin-top: 0.35rem; }
+    .flags { margin-top: 1rem; }
+    .flags label { font-weight: 400; display: flex; gap: 0.5rem; align-items: center; }
+    button { margin-top: 1.25rem; padding: 0.5rem 1rem; }
+    .hint { color: #555; font-size: 0.9rem; }
+    .apps { margin-top: 2rem; }
+    .apps li { margin: 0.35rem 0; }
+    .ok { background: #e8f5e9; padding: 0.75rem 1rem; }
+    .err { background: #fdecea; padding: 0.75rem 1rem; }
+  </style>
+</head>
+<body>
+  <p><a href="/">返回知识图谱后台</a> · <a href="/lending/retrieve">图谱检索</a> · <a href="/lending/chat">图谱问答</a> · <a href="/lending/ontology">本体</a></p>
+  <h1>导入贷款申请</h1>
+  <p class="hint">上传 TXT / PDF / DOCX。每个申请会写成独立的 Application 节点，实体 id 带案件前缀，不会和已有案件合并。</p>
+  <form method="post" action="/api/lending/import" enctype="multipart/form-data">
+    <label>申请人名称
+      <input type="text" name="applicant_name" required placeholder="Harbor Bakehouse Pvt Ltd" />
+    </label>
+    <label>案件 ID（可空，默认由名称生成）
+      <input type="text" name="application_id" placeholder="harbor-bakery" />
+    </label>
+    <label>申请材料
+      <input type="file" name="files" multiple required accept=".txt,.pdf,.docx,.md" />
+    </label>
+    <div class="flags">
+      <label><input type="checkbox" name="high_risk" /> 高风险（收入集中 / 风险备忘）</label>
+      <label><input type="checkbox" name="thin_credit" /> 信贷记录薄（无银行还款记录）</label>
+    </div>
+    <p class="hint">两项都勾选时，规则会推出 RequiresManualReview，并转人工审；否则记录为通过。</p>
+    <button type="submit">导入并写入图谱</button>
+  </form>
+  <section class="apps">
+    <h2>已有案件</h2>
+    {{applications}}
+  </section>
+</body>
+</html>

@@ -1,0 +1,40 @@
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix lend: <https://example.org/lending#> .
+
+<https://example.org/lending#> a owl:Ontology ;
+    rdfs:label "Accountable Lending" ;
+    rdfs:comment "Schema for scoped loan applications and recorded decisions." .
+
+lend:Application a owl:Class ; rdfs:label "Application" .
+lend:Decision a owl:Class ; rdfs:label "Decision" .
+lend:Document a owl:Class ; rdfs:label "Document" .
+lend:Entity a owl:Class ; rdfs:label "Entity" .
+
+lend:application_id a owl:DatatypeProperty ;
+    rdfs:domain lend:Application ;
+    rdfs:range xsd:string ;
+    rdfs:label "application_id" .
+
+lend:category a owl:DatatypeProperty ;
+    rdfs:domain lend:Decision ;
+    rdfs:range xsd:string ;
+    rdfs:label "category" .
+
+lend:outcome a owl:DatatypeProperty ;
+    rdfs:domain lend:Decision ;
+    rdfs:range xsd:string ;
+    rdfs:label "outcome" .
+
+lend:HAS_DECISION a owl:ObjectProperty ;
+    rdfs:domain lend:Application ;
+    rdfs:range lend:Decision .
+
+lend:HAS_DOCUMENT a owl:ObjectProperty ;
+    rdfs:domain lend:Application ;
+    rdfs:range lend:Document .
+
+lend:CAUSED a owl:ObjectProperty ;
+    rdfs:domain lend:Decision ;
+    rdfs:range lend:Decision .

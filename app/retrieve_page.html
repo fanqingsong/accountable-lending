@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>图谱检索</title>
+  <style>
+    body { font-family: sans-serif; max-width: 52rem; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+    a { color: #0b57d0; }
+    input[type=text] { width: 100%; padding: 0.4rem; }
+    button { margin-top: 0.75rem; padding: 0.45rem 1rem; }
+    .hit, .decision { border: 1px solid #ddd; padding: 0.75rem 1rem; margin: 0.6rem 0; }
+    .meta { color: #555; font-size: 0.85rem; }
+    .hint { color: #555; font-size: 0.9rem; }
+    pre { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <p><a href="/">知识图谱</a> · <a href="/lending">导入案件</a> · <a href="/lending/chat">图谱问答</a> · <a href="/lending/ontology">本体</a></p>
+  <h1>图谱检索</h1>
+  <p class="hint">无 LLM。返回文档片段、相关实体，以及决策的 CAUSED 链。</p>
+  <form method="post" action="/lending/retrieve">
+    <label>问题
+      <input type="text" name="query" value="{{query}}" required placeholder="Sunrise 为什么转人工审？" />
+    </label>
+    <button type="submit">检索</button>
+  </form>
+  {{results}}
+</body>
+</html>

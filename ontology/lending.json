@@ -1,0 +1,39 @@
+{
+  "name": "lending",
+  "base_uri": "https://example.org/lending#",
+  "description": "Schema for scoped loan applications and recorded decisions.",
+  "classes": [
+    {"name": "Application", "description": "One loan case"},
+    {"name": "Decision", "description": "A recorded lending decision"},
+    {"name": "Document", "description": "An applicant document"},
+    {"name": "Entity", "description": "A participant extracted from documents"}
+  ],
+  "properties": [
+    {
+      "name": "application_id",
+      "domain": "Application",
+      "range": "string",
+      "required": true,
+      "description": "Stable case id"
+    },
+    {
+      "name": "category",
+      "domain": "Decision",
+      "range": "string",
+      "required": true,
+      "description": "Decision category"
+    },
+    {
+      "name": "outcome",
+      "domain": "Decision",
+      "range": "string",
+      "required": true,
+      "description": "Decision outcome"
+    }
+  ],
+  "relationships": [
+    {"name": "HAS_DECISION", "domain": "Application", "range": "Decision", "required": true},
+    {"name": "HAS_DOCUMENT", "domain": "Application", "range": "Document"},
+    {"name": "CAUSED", "domain": "Decision", "range": "Decision"}
+  ]
+}

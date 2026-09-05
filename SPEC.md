@@ -25,13 +25,48 @@ decisions, and their causal edges.
    explicit `CAUSED` edges (the uppercase type the causal traverser matches)
 6. **Audit** — `get_causal_chain(direction="upstream")` +
    `find_precedents()`, printed as the trail
-7. **Export** — `RDFExporter` (Turtle) after minting stable IRIs for
-   free-text entity ids, then `_run_pyshacl` against generated shapes
+7. **Export** — `ContextGraph.save_to_file` JSON for Explorer; MERGE into
+   Neo4j when `NEO4J_URI` is set; optional `RDFExporter` (Turtle) after
+   minting stable IRIs, then `_run_pyshacl` against generated shapes
+
+## Admin UI (phase 0)
+
+`python -m app.admin` / Compose service `admin` loads the JSON (or rebuilds
+the pipeline) and serves Semantica Knowledge Explorer. Instance data is LPG
+in Neo4j. Turtle is a compliance export, not the runtime store.
+
+## Case import (phase 1)
+
+`GET /lending` uploads applicant files. Each case is scoped with
+`{application_id}::` entity ids and an `Application` node (`CONTAINS` /
+`HAS_DOCUMENT` / `HAS_DECISION`). Sunrise remains the seed case
+(`sunrise-coffee`). A second fictional pack is `data/samples/harbor-bakery/`.
+
+## GraphRAG retrieve (phase 2)
+
+`POST /api/lending/retrieve` and `GET /lending/retrieve` return document
+chunks, matching entities, and the `CAUSED` decision chain. Keyword search
+always runs; Qdrant is used when `QDRANT_URL` is set. No LLM generation.
+
+## Ontology (phase 4)
+
+Checked-in OWL/SHACL lives in `ontology/`. `GET /lending/ontology` shows
+required fields and validates the live graph. Import refuses a case that
+is missing `Decision.category` / `outcome` or `HAS_DECISION`. Neo4j gets
+the `entity_id` unique constraint; property-existence constraints are
+applied when the edition supports them (Community skips them).
+
+## Chat (phase 3)
+
+`POST /api/lending/chat` and `GET /lending/chat` call retrieve first, then
+optionally ask Ollama (`OLLAMA_URL`) to write a short answer from that
+evidence. If Ollama is down, the page falls back to an extractive paragraph
+from the decision chain. The LLM never writes the graph, never extracts,
+and never records a decision.
 
 ## Non-goals (v1)
 
-- No LLM calls, no API keys, no network at demo time (after first model pull)
-- No web UI, no persistence store — the in-memory graph is the artifact
+- No LLM in ingest / extract / reason / `record_decision`
 - No real production data — the sample documents are fictional
 
 ## Decisions locked in
@@ -47,7 +82,14 @@ decisions, and their causal edges.
 
 ## Verification
 
-- `python demo.py` exits 0 with all seven stage banners and the SHACL
-  conformance line
+- `python demo.py` exits 0 with all seven stage banners, JSON export, and
+  the SHACL conformance line
 - `python -m pytest tests/ -q` green; `-m integration` green
 - `demo.ipynb` executes top-to-bottom with the same results
+- Compose `admin` serves Explorer at `:8000` after Neo4j is healthy
+- `GET /lending/retrieve` answers “为什么转人工” with risk-note chunks and the
+  `risk_classification → policy_check → final_decision` CAUSED chain
+- `GET /lending/chat` answers the same question in a paragraph that names
+  the decision chain; Ollama is optional
+- `GET /lending/ontology` reports that the live graph conforms to the
+  Application / Decision shapes

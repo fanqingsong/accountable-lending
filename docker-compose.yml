@@ -1,0 +1,93 @@
+services:
+  neo4j:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/neo4j:5-community
+    container_name: accountable-lending-neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/lending-demo
+      NEO4J_server_memory_heap_initial__size: 256m
+      NEO4J_server_memory_heap_max__size: 512m
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  demo:
+    build: .
+    container_name: accountable-lending-demo
+    profiles: ["cli"]
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    volumes:
+      - ./exports:/app/exports
+    environment:
+      SEMANTICA_DISABLE_PROGRESS: "1"
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: lending-demo
+
+  qdrant:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/qdrant/qdrant:latest
+    container_name: accountable-lending-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:6333/readyz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  ollama:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/ollama/ollama:latest
+    container_name: accountable-lending-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  admin:
+    build: .
+    container_name: accountable-lending-admin
+    command: ["python", "-m", "app.admin"]
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./exports:/app/exports
+      - ./app:/app/app
+      - ./demo.py:/app/demo.py
+      - ./data:/app/data
+      - ./tests:/app/tests
+      - ./pytest.ini:/app/pytest.ini
+      - ./ontology:/app/ontology
+    environment:
+      SEMANTICA_DISABLE_PROGRESS: "1"
+      SEMANTICA_ALLOW_ANONYMOUS: "true"
+      EXPLORER_CORS_ORIGINS: "http://localhost:8000,http://127.0.0.1:8000,http://localhost:5173,http://127.0.0.1:5173"
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: lending-demo
+      EXPLORER_HOST: "0.0.0.0"
+      EXPLORER_PORT: "8000"
+      LENDING_REBUILD: ${LENDING_REBUILD:-}
+      QDRANT_URL: http://qdrant:6333
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:1.5b}
+
+volumes:
+  neo4j_data:
+  qdrant_data:
+  ollama_data:

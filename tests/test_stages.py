@@ -92,6 +92,26 @@ def test_stage_decide_records_three_decisions_with_causal_edges():
     assert tgt2 == decisions["final_decision"]
 
 
+def test_stage_decide_uses_applicant_entity_ids_and_approval_path():
+    graph = FakeDecideGraph()
+    decisions = demo.stage_decide(
+        graph,
+        applicant="Harbor Bakehouse Pvt Ltd",
+        entity_ids=["harbor::Priya"],
+        high_risk=False,
+        thin_credit=False,
+    )
+
+    assert graph.decision_calls[0]["entities"] == ["harbor::Priya"]
+    assert "Harbor Bakehouse Pvt Ltd" in graph.decision_calls[0]["scenario"]
+    assert [call["outcome"] for call in graph.decision_calls] == [
+        "standard_risk",
+        "policy_cleared",
+        "approved",
+    ]
+    assert set(decisions) == {"risk_classification", "policy_check", "final_decision"}
+
+
 # ---------------------------------------------------------------------------
 # stage_audit
 # ---------------------------------------------------------------------------
@@ -183,6 +203,9 @@ def test_stage_ingest_returns_three_documents_from_data_dir(monkeypatch, capsys)
 
 
 class FakeExportGraph:
+    def __init__(self):
+        self.saved_paths = []
+
     def to_kg_dict(self):
         return {
             "entities": [
@@ -202,6 +225,10 @@ class FakeExportGraph:
                 },
             ],
         }
+
+    def save_to_file(self, path):
+        self.saved_paths.append(str(path))
+        Path(path).write_text("{}", encoding="utf-8")
 
 
 class FakeExporter:
@@ -237,10 +264,13 @@ class FakeValidationReport:
         return 0
 
 
-def test_stage_export_exports_iri_ids_and_prints_validation_report(monkeypatch, capsys):
+def test_stage_export_exports_iri_ids_and_prints_validation_report(monkeypatch, capsys, tmp_path):
     fake_exporter = FakeExporter()
     fake_shacl = FakeSHACLGenerator()
     fake_report = FakeValidationReport()
+
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+    monkeypatch.setattr(demo, "ROOT", tmp_path)
 
     # demo imports these *inside* stage_export, so patch the modules
     monkeypatch.setattr(semantica.export, "RDFExporter", lambda: fake_exporter)
@@ -251,7 +281,11 @@ def test_stage_export_exports_iri_ids_and_prints_validation_report(monkeypatch, 
         lambda *args, **kwargs: fake_report,
     )
 
-    demo.stage_export(FakeExportGraph())
+    graph = FakeExportGraph()
+    demo.stage_export(graph)
+
+    assert graph.saved_paths
+    assert graph.saved_paths[0].endswith("lending_graph.json")
 
     # exporter received a KG whose entity ids are all IRIs
     assert len(fake_exporter.exported) == 1
@@ -271,5 +305,7 @@ def test_stage_export_exports_iri_ids_and_prints_validation_report(monkeypatch, 
 
     # report summary printed
     out = capsys.readouterr().out
+    assert "exported JSON:" in out
     assert "exported RDF:" in out
     assert "SHACL validation: conforms: True" in out
+    assert "Neo4j persist skipped" in out

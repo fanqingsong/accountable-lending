@@ -12,7 +12,8 @@ governed AI decision:
     4. Reason      — a forward-chained rule derives a new fact
     5. Decide      — three chained decisions recorded with full context
     6. Audit       — the causal chain and precedents, printed as an audit trail
-    7. Export      — RDF/Turtle export, then SHACL validation of the result
+    7. Export      — ContextGraph JSON (Explorer), optional RDF/Turtle + SHACL,
+                     then LPG persist to Neo4j when NEO4J_URI is set
 
 The point of the demo is the finale: after everything runs, the graph itself
 can answer "why was this loan routed to manual review?" — with the decisions,
@@ -153,7 +154,7 @@ def stage_graph(build_result: Dict[str, Any]):
 # Stage 4 — Reason
 # --------------------------------------------------------------------------
 
-def stage_reason(graph) -> List[str]:
+def stage_reason(graph, subject: str = "SunriseCoffeeRoasters") -> List[str]:
     """Forward-chain one business rule over the extracted facts.
 
     The rule: a company flagged as high-risk AND carrying a thin credit
@@ -161,20 +162,13 @@ def stage_reason(graph) -> List[str]:
     """
     from semantica.reasoning import Reasoner
 
-    entity_names = []
-    for node in graph.to_dict().get("nodes", []):
-        content = (node.get("content") or node.get("id") or "").lower()
-        if "coffee" in content or "sunrise" in content:
-            entity_names.append(node.get("id"))
-
     reasoner = Reasoner()
     reasoner.add_rule(
         "IF HighRiskFlag(?x) AND ThinCreditHistory(?x) "
         "THEN RequiresManualReview(?x)"
     )
-    # Ground facts derived from the ingested risk notes (stage 1).
-    reasoner.add_fact("HighRiskFlag(SunriseCoffeeRoasters)")
-    reasoner.add_fact("ThinCreditHistory(SunriseCoffeeRoasters)")
+    reasoner.add_fact(f"HighRiskFlag({subject})")
+    reasoner.add_fact(f"ThinCreditHistory({subject})")
 
     conclusions = []
     for result in reasoner.forward_chain():
@@ -189,26 +183,60 @@ def stage_reason(graph) -> List[str]:
 # Stage 5 — Decide
 # --------------------------------------------------------------------------
 
-def stage_decide(graph) -> Dict[str, str]:
+def stage_decide(
+    graph,
+    applicant: str = "Sunrise Coffee Roasters LLC",
+    entity_ids: List[str] | None = None,
+    high_risk: bool = True,
+    thin_credit: bool = True,
+) -> Dict[str, str]:
     """Record three chained decisions, each linked to its evidence.
 
     Returns a mapping of decision label -> decision id.
     """
-    entities = [
+    entities = entity_ids or [
         node.get("id")
         for node in graph.to_dict().get("nodes", [])
     ][:6]
+
+    if high_risk:
+        risk_outcome = "high_risk"
+        risk_reason = (
+            "Revenue concentration or missing repayment history flags this "
+            f"applicant ({applicant}) as high risk."
+        )
+    else:
+        risk_outcome = "standard_risk"
+        risk_reason = f"No high-risk flags were raised for {applicant}."
+
+    if high_risk and thin_credit:
+        policy_outcome = "manual_review_required"
+        policy_reason = (
+            "Policy 7.3 requires manual review when revenue concentration "
+            "exceeds 35% or when no external repayment record exists."
+        )
+        final_outcome = "referred_to_manual_review"
+        final_reason = (
+            "Automated approval is not permitted under Policy 7.3; the "
+            "application is routed to the manual review queue."
+        )
+    else:
+        policy_outcome = "policy_cleared"
+        policy_reason = (
+            "Policy 7.3 does not require manual review for this profile."
+        )
+        final_outcome = "approved"
+        final_reason = (
+            f"Automated approval is permitted for {applicant} under Policy 7.3."
+        )
 
     decisions: Dict[str, str] = {}
 
     decisions["risk_classification"] = graph.record_decision(
         category="risk_classification",
-        scenario="Loan application for Sunrise Coffee Roasters LLC",
-        reasoning=(
-            "38% revenue concentration with Café Amara plus no prior bank "
-            "borrowing history."
-        ),
-        outcome="high_risk",
+        scenario=f"Loan application for {applicant}",
+        reasoning=risk_reason,
+        outcome=risk_outcome,
         confidence=0.87,
         entities=entities,
         decision_maker="underwriting_agent",
@@ -217,11 +245,8 @@ def stage_decide(graph) -> Dict[str, str]:
     decisions["policy_check"] = graph.record_decision(
         category="policy_check",
         scenario="Internal lending policy for first-time borrowers",
-        reasoning=(
-            "Policy 7.3 requires manual review when revenue concentration "
-            "exceeds 35% or when no external repayment record exists."
-        ),
-        outcome="manual_review_required",
+        reasoning=policy_reason,
+        outcome=policy_outcome,
         confidence=0.95,
         entities=entities,
         decision_maker="policy_engine",
@@ -229,12 +254,9 @@ def stage_decide(graph) -> Dict[str, str]:
 
     decisions["final_decision"] = graph.record_decision(
         category="final_decision",
-        scenario="Loan outcome for Sunrise Coffee Roasters LLC",
-        reasoning=(
-            "Automated approval is not permitted under Policy 7.3; the "
-            "application is routed to the manual review queue."
-        ),
-        outcome="referred_to_manual_review",
+        scenario=f"Loan outcome for {applicant}",
+        reasoning=final_reason,
+        outcome=final_outcome,
         confidence=0.93,
         entities=entities,
         decision_maker="underwriting_agent",
@@ -328,15 +350,37 @@ def _with_iris(kg: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def stage_export(graph) -> None:
-    """Export the graph as Turtle and validate it against generated SHACL
-    shapes. The shapes encode the same business rule the pipeline enforced,
-    so the export carries the proof that the graph meets its own policy."""
+    """Persist the working graph, then write the optional RDF compliance export.
+
+    JSON is the Explorer / admin-UI source of truth. Turtle + SHACL stay as
+    an interchange artifact. Neo4j is written when ``NEO4J_URI`` is set.
+    """
     from semantica.export import RDFExporter
     from semantica.ontology import SHACLGenerator
     from semantica.ontology.ontology_validator import _run_pyshacl
 
-    out_path = ROOT / "exports" / "lending_graph.ttl"
-    out_path.parent.mkdir(exist_ok=True)
+    export_dir = ROOT / "exports"
+    export_dir.mkdir(exist_ok=True)
+    json_path = export_dir / "lending_graph.json"
+    out_path = export_dir / "lending_graph.ttl"
+
+    if hasattr(graph, "save_to_file"):
+        graph.save_to_file(str(json_path))
+        note(f"exported JSON: {json_path}")
+
+    try:
+        from app.stores import persist_graph
+
+        persisted = persist_graph(graph)
+        if persisted.get("skipped"):
+            note("Neo4j persist skipped (NEO4J_URI not set)")
+        else:
+            note(
+                f"persisted LPG to Neo4j: {persisted['nodes']} nodes, "
+                f"{persisted['edges']} edges"
+            )
+    except Exception as exc:  # noqa: BLE001 — demo: report and continue
+        note(f"!! Neo4j persist could not run: {type(exc).__name__}: {exc}")
 
     exporter = RDFExporter()
     exporter.export_knowledge_graph(
@@ -345,28 +389,9 @@ def stage_export(graph) -> None:
     note(f"exported RDF: {out_path}")
     note(f"  triples written: {sum(1 for line in out_path.read_text(encoding='utf-8').splitlines() if line.endswith('.'))}")
 
-    ontology = {
-        "name": "lending",
-        "base_uri": "https://example.org/lending#",
-        "classes": [
-            {"name": "Decision", "description": "A recorded lending decision"},
-            {"name": "Entity", "description": "A participant in the decision"},
-        ],
-        "properties": [
-            {
-                "name": "category",
-                "domain": "Decision",
-                "range": "string",
-                "description": "Decision category",
-            },
-            {
-                "name": "outcome",
-                "domain": "Decision",
-                "range": "string",
-                "description": "Decision outcome",
-            },
-        ],
-    }
+    from app.ontology import LENDING_ONTOLOGY
+
+    ontology = LENDING_ONTOLOGY
     shapes = SHACLGenerator().generate(ontology)
     shapes_ttl = SHACLGenerator().serialize(shapes, format="turtle")
 

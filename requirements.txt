@@ -1,5 +1,6 @@
-# Runtime dependencies for the demo
-semantica[shacl]>=0.6.6
+# Runtime dependencies for the demo and admin UI
+semantica[shacl,explorer,graph-neo4j]>=0.6.6
+qdrant-client>=1.9
 spacy>=3.7
 
 # The spaCy model used by local (no-LLM) entity extraction:

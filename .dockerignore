@@ -2,8 +2,13 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
-exports/
 .pytest_cache/
 .ipynb_checkpoints/
-.playwright-mcp/
-docker/*.whl
+exports/
+.git/
+.gitignore
+demo.ipynb
+tests/
+README.md
+SPEC.md
+LICENSE

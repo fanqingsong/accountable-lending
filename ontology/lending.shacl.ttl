@@ -1,0 +1,21 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix lend: <https://example.org/lending#> .
+
+lend:ApplicationShape a sh:NodeShape ;
+    sh:targetClass lend:Application ;
+    sh:property [
+        sh:path lend:application_id ;
+        sh:minCount 1 ;
+        sh:datatype <http://www.w3.org/2001/XMLSchema#string> ;
+    ] .
+
+lend:DecisionShape a sh:NodeShape ;
+    sh:targetClass lend:Decision ;
+    sh:property [
+        sh:path lend:category ;
+        sh:minCount 1 ;
+    ] ;
+    sh:property [
+        sh:path lend:outcome ;
+        sh:minCount 1 ;
+    ] .
