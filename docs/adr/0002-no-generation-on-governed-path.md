@@ -48,3 +48,5 @@ exists only to turn that evidence into a short cited sentence.
 - Chat tests and UI must stay correct when Ollama is missing.
 - Architecture reviews should not re-propose “just generate the answer”
   inside retrieve, or “let the model record the Decision.”
+- Retrieve / chat sequence:
+  [runtime-flows.md](../runtime-flows.md).

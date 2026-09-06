@@ -22,6 +22,7 @@ Single-context repo:
 ├── SPEC.md
 ├── AGENT.md
 ├── docs/adr/
+├── docs/runtime-flows.md   # Prefect write + retrieve/chat read
 ├── docs/agents/
 ├── backend/
 ├── frontend/lending/

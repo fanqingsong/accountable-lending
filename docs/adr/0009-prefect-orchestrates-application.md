@@ -54,3 +54,5 @@ mutated the in-process graph; a Prefect worker cannot share that object.
   not mixed into `backend/application/`. The folder is not importable as
   `prefect` (that name is the installed library); the package is
   `lending_prefect`. Do not add a `flows/` or `services/` tree.
+- Sequence and task diagrams:
+  [runtime-flows.md](../runtime-flows.md).

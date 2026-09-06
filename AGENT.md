@@ -68,7 +68,8 @@ Prefect.
   is the schema source of truth; OWL/SHACL are projections.
 - [ADR-0009](docs/adr/0009-prefect-orchestrates-application.md) — Prefect
   composes the governed path; `backend/application/` stays Prefect-free; snapshot
-  handoff between worker and lending-api.
+  handoff between worker and lending-api. Pictures:
+  [docs/runtime-flows.md](docs/runtime-flows.md).
 - [ADR-0010](docs/adr/0010-modular-kiss-dry.md) — Modular packages, KISS,
   and DRY: name modules after CONTEXT terms; smallest change that honors
   the seam; one source of truth at a real seam. Not a `services/` tree.
@@ -99,6 +100,7 @@ Prefect.
 | `tests/` | Fast unit tests default; real pipeline behind `integration` marker |
 | `scripts/` | Host helpers: `run.sh`, `stop.sh`, spaCy wheel download. Not a home for domain code. |
 | `docs/screenshots/` | Explorer / lending UI captures. Not product assets the pipeline reads. |
+| `docs/runtime-flows.md` | Walkthrough of Prefect write path and retrieve / chat read path (Mermaid). Not an ADR. |
 | `docs/agents/` | Issue tracker, triage labels, and domain-doc rules for engineering skills. Not runtime. |
 | `.scratch/` | Local PRDs and implementation issues (tracker of record). Not runtime. Do not gitignore. |
 | `docker-compose.yml` | `neo4j` + `qdrant` + `ollama` + `prefect-server` + `prefect-worker` + `lending-api` + `lending-ui` + `explorer` |

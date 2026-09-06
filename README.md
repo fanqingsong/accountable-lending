@@ -30,6 +30,8 @@ flowchart LR
     G --> J[Explorer]
 ```
 
+Compose-time Prefect vs retrieve / chat: [docs/runtime-flows.md](docs/runtime-flows.md).
+
 | Stage | What happens | Semantica module |
 |---|---|---|
 | 1. Ingest | Three applicant documents (business profile, financials, risk notes) are read through `FileIngestor` | `ingest` |
@@ -162,6 +164,7 @@ docker/            spaCy model wheel (downloaded by scripts/run.sh)
 Dockerfile         container image definition
 docker-compose.yml neo4j + qdrant + ollama + prefect + lending-api + lending-ui + explorer
 scripts/           run.sh, stop.sh, model download
+docs/              ADRs + runtime-flows.md (Prefect vs retrieve/chat)
 docs/screenshots/  Explorer / lending UI captures
 tests/             unit tests + integration smoke test
 exports/           generated JSON / RDF (git-ignored)
