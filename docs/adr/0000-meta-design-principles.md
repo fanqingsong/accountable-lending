@@ -14,7 +14,7 @@ chain — not a web framework, a vector store, or a chat model.
 
 Without a meta rule, reviews oscillate between two failure modes:
 paste in UseCase / Entity / Repository trees that fail the deletion
-test, or grow FastAPI routes and the `demo/` CLI until the domain has no
+test, or grow FastAPI routes and a CLI until the domain has no
 home. Clean Architecture, DDD, and SOLID already name the trade-off
 we want. This ADR says how they apply *here*.
 
@@ -37,9 +37,11 @@ Dependencies point inward, toward the governed loan story.
 - **Inside:** Application attach, scoped entity ids, Decision recording,
   `CAUSED` / `HAS_DECISION`, schema checks that do not need HTTP or RDF.
 - **Outside (adapters):** FastAPI routes, Explorer service, Neo4j LPG,
-  Qdrant, Ollama, RDF/SHACL export, the lending-ui SPA in `frontend/lending/`.
-- A CLI (`python -m demo`) and an HTTP import path are two adapters on the same
-  inner modules. The printable seven-stage narrative must not own
+  Qdrant, Ollama, RDF/SHACL export, Prefect Server / process runner, the
+  lending-ui SPA in `frontend/lending/`.
+- HTTP import and Prefect `application_flow` are
+  adapters on the same inner modules. Prefect composes the governed path
+  ([ADR-0009](0009-prefect-orchestrates-application.md)); it does not own
   Decision or Application behavior.
 - Do not add a layer whose deletion merely moves call-throughs. One
   adapter is a hypothetical seam; two adapters make a real one
@@ -81,6 +83,9 @@ Dependencies point inward, toward the governed loan story.
 
 ### How later ADRs use this file
 
+- How to grow modules, apply KISS, and apply DRY is
+  [ADR-0010](0010-modular-kiss-dry.md). Do not treat SOLID as a reason
+  to add a file per function.
 - Record a feature ADR when a choice is hard to reverse and surprising.
 - If a proposal fights this meta ADR (new inner dependency on HTTP,
   LLM on the governed path, RDF as runtime, global entity ids), reject
@@ -104,10 +109,9 @@ Dependencies point inward, toward the governed loan story.
 - Architecture reviews start here, then apply 0001–0005. They do not
   re-propose "add a service layer" or "put an LLM in reason" without
   a new ADR.
-- Known debt that already violates the dependency rule (runtime
-  `pipeline` importing the `demo/` CLI) is to be removed by deepening
-  the inner Application / Decision modules, not by documenting it as
-  intended.
+- Known debt that already violates the dependency rule is to be removed
+  by deepening the inner Application / Decision modules, not by
+  documenting it as intended.
 - Tests follow the same seams as callers. Prefer tests through
   Application attach, retrieve evidence, and JSON `/api/lending/*`
   over tests of pass-through helpers.

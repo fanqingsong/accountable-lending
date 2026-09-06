@@ -20,8 +20,9 @@ exists only to turn that evidence into a short cited sentence.
 ## Decision
 
 - **Ingest, extract, reason, and `record_decision` have no LLM.** Extraction
-  stays local spaCy. Reasoning stays the forward-chained rule
-  `HighRiskFlag(X) AND ThinCreditHistory(X) => RequiresManualReview(X)`.
+  stays local spaCy. The policy rule
+  `HighRiskFlag(X) AND ThinCreditHistory(X) => RequiresManualReview(X)`
+  is applied when recording Decisions.
 - **Retrieve is GraphRAG without generation.** Keyword search always runs;
   Qdrant is used when `QDRANT_URL` is set. Retrieve does not call Ollama.
 - **Chat calls retrieve first.** Ollama (`OLLAMA_URL`) may write a short

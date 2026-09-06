@@ -1,6 +1,6 @@
 ---
 description: Where new lending code goes; do not invent a folder tree
-globs: backend/**/*.py,frontend/lending/**
+globs: backend/**/*.py,prefect/**/*.py,frontend/lending/**
 alwaysApply: false
 ---
 
@@ -16,10 +16,11 @@ backend/services/decision_service.py
 backend/pages/chat.html
 
 # GOOD — existing seams
-backend/pipeline.py          # Application / Decision / CAUSED
+backend/application/         # Application attach, policy facts, snapshot load
+prefect/lending_prefect/     # ingest.py + worker / flows
+backend/prefect_api.py       # HTTP to Prefect Server (no lending_prefect import)
 backend/routes.py            # /api/lending/* JSON only
 frontend/lending/src/        # React UI calls the JSON API
-demo/                        # python -m demo — CLI adapter only
 ```
 
 - New capability = JSON route + client in `frontend/lending/`.

@@ -35,7 +35,7 @@ flowchart LR
 | 1. Ingest | Three applicant documents (business profile, financials, risk notes) are read through `FileIngestor` | `ingest` |
 | 2. Extract | 40+ entities and 150+ relationships pulled from the documents by local spaCy-backed extractors | `kg.GraphBuilder` |
 | 3. Graph | A `ContextGraph` assembled from the extractions — entities, relationships, weights | `context` |
-| 4. Reason | `HighRiskFlag(X) AND ThinCreditHistory(X) => RequiresManualReview(X)` forward-chains and derives a new fact | `reasoning` |
+| 4. Reason | Demo prints whether `HighRiskFlag ∧ ThinCreditHistory` would derive `RequiresManualReview` | — |
 | 5. Decide | Three decisions recorded with full context and explicit `CAUSED` edges: risk classification → policy check → final outcome | `context` |
 | 6. Audit | The causal chain is traversed back from the final decision; precedents are searched | `context` |
 | 7. Export | ContextGraph JSON for Explorer, LPG write to Neo4j when `NEO4J_URI` is set, optional Turtle + SHACL | `export`, `ontology`, `graph_store` |
@@ -47,7 +47,6 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 
-python -m demo                 # audit trail on stdout; writes exports/
 python -m backend.api          # JSON API at :8001 (writes the snapshot)
 python -m backend.admin        # Explorer at :8000 (loads the snapshot)
 ```
@@ -61,15 +60,15 @@ Explorer itself serves the snapshot ContextGraph.
 Requires [Docker](https://docs.docker.com/get-docker/) with Compose v2 (`docker compose`).
 
 ```bash
-./scripts/run.sh    # Neo4j + Qdrant + Ollama + three HTTP adapters
+./scripts/run.sh    # Neo4j + Qdrant + Ollama + Prefect + three HTTP adapters
 ./scripts/stop.sh   # stop containers and remove the compose stack
 ```
 
 `scripts/run.sh` downloads the spaCy model wheel into `docker/` if it is not already
 present, starts Ollama and pulls `${OLLAMA_MODEL:-qwen2.5:1.5b}`, then starts Neo4j,
-Qdrant, `lending-api`, `lending-ui`, and `explorer`. First boot runs the lending
-pipeline inside lending-api, writes
-`exports/lending_graph.json` (and optional Turtle), MERGEs the graph into Neo4j,
+Qdrant, Prefect Server / worker, `lending-api`, `lending-ui`, and `explorer`.
+First boot runs `application_flow` on the worker, writes
+`exports/lending_graph.json`, MERGEs the graph into Neo4j,
 indexes chunks into Qdrant when available, and lets Explorer load that snapshot.
 
 | Surface | URL |
@@ -80,6 +79,7 @@ indexes chunks into Qdrant when available, and lets Explorer load that snapshot.
 | GraphRAG retrieve (no LLM) | http://localhost:8080/lending/retrieve |
 | GraphRAG chat (LLM writes the sentence) | http://localhost:8080/lending/chat |
 | Ontology / SHACL | http://localhost:8080/lending/ontology |
+| Prefect UI | http://localhost:4200 |
 | Neo4j Browser | http://localhost:7474 (user `neo4j`, password `lending-demo`) |
 
 Chat at `http://localhost:8080/lending/chat` retrieves first, then asks Ollama (`OLLAMA_URL`)
@@ -102,12 +102,6 @@ Rebuild the graph from `data/` on the next start:
 LENDING_REBUILD=1 docker compose up lending-api
 ```
 
-CLI-only audit trail (no UI):
-
-```bash
-docker compose --profile cli up --build --abort-on-container-exit demo
-```
-
 The first image build takes several minutes (Semantica pulls PyTorch and the
 Explorer bundle; `lending-ui` runs `npm ci` + Vite). Later runs reuse the
 cached images.
@@ -121,28 +115,11 @@ cd frontend/lending && npm install && npm run dev
 
 ## What the output looks like
 
-```
-========================================================================
-  Reason
-========================================================================
-    derived: RequiresManualReview(SunriseCoffeeRoasters)  (via Rule 1)
-
-========================================================================
-  Audit
-========================================================================
-    causal chain (upstream from the final decision):
-      <- [risk_classification] high_risk  (c866337f-…)
-      <- [policy_check] manual_review_required  (ce1cd65a-…)
-
-========================================================================
-  Export & validate
-========================================================================
-    exported JSON: exports/lending_graph.json
-    persisted LPG to Neo4j: 40 nodes, 150 edges
-    exported RDF: exports/lending_graph.ttl
-      triples written: 157
-    SHACL validation: Graph conforms to all SHACL constraints.
-```
+`application_flow` writes `exports/lending_graph.json` and, when
+`NEO4J_URI` is set, MERGEs the LPG. Retrieve answers “为什么转人工”
+with risk-note chunks and the three-decision `CAUSED` chain. Chat names
+that same chain. The ontology page reports whether the live graph
+conforms to `ontology/lending.json`.
 
 ## Why this matters
 
@@ -158,7 +135,7 @@ that chain, persisted as a graph:
 - the **LPG** in Neo4j (system of record) and the JSON Explorer loads,
 - the optional **RDF export** any triplestore can read, validated against shapes.
 
-Re-run `python -m demo` on modified data and the pipeline produces a *different*
+Re-run `application_flow` on modified data and the pipeline produces a *different*
 trail — same mechanics, new evidence. That is the difference between
 "the model said so" and "here is the audit trail".
 
@@ -176,14 +153,14 @@ python -m pytest tests/ -q -m integration
 ## Repository layout
 
 ```
-demo/              CLI adapter (`python -m demo`) + notebook
 backend/           lending-api, Explorer adapter, persist, import, retrieve, chat
+prefect/           Prefect worker (`lending_prefect`)
 frontend/lending/  React + Vite + Ant Design lending UI (JSON client)
 data/              seed applicant documents + samples/harbor-bakery
 ontology/          OWL + SHACL for Application / Decision
 docker/            spaCy model wheel (downloaded by scripts/run.sh)
 Dockerfile         container image definition
-docker-compose.yml neo4j + qdrant + ollama + lending-api + lending-ui + explorer
+docker-compose.yml neo4j + qdrant + ollama + prefect + lending-api + lending-ui + explorer
 scripts/           run.sh, stop.sh, model download
 docs/screenshots/  Explorer / lending UI captures
 tests/             unit tests + integration smoke test

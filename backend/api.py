@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import threading
 
-from backend.admin import load_or_build_graph, _note
+from backend.snapshot import load_or_build_graph, note as _note
 
 
 def main() -> None:
@@ -42,6 +42,12 @@ def main() -> None:
     class Session:
         def __init__(self, graph):
             self.graph = graph
+
+        def reload_graph(self):
+            from backend.application import GRAPH_JSON, load_graph
+
+            if GRAPH_JSON.is_file():
+                self.graph = load_graph(GRAPH_JSON)
 
         def rebuild_search_index(self):
             return None

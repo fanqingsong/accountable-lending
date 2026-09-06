@@ -1,1 +1,1 @@
-"""Runtime services for the lending platform (admin UI, LPG persist)."""
+"""Lending runtime: Application, retrieve, and HTTP adapters."""

@@ -24,7 +24,7 @@ driven, and it does not allow runtime schema edits.
 ## Decision
 
 - **`ontology/lending.json` is the only schema document** for required
-  properties and required relationships. `backend/ontology.py` derives
+  properties and required relationships. `backend/ontology/` derives
   validation from it (including the `decision` LPG label alias for
   `Decision`).
 - **OWL (`lending.ttl`) and SHACL (`lending.shacl.ttl`) are projections**

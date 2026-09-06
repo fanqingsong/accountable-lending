@@ -41,6 +41,8 @@ extracted entities, the rule that fired, and the three chained Decisions.
 - Ontology import requires `Decision.category` / `outcome` and
   `HAS_DECISION`. Those edges attach Decisions to the Application; they
   do not replace `CAUSED` between Decisions.
-- This ADR does not say whether reasoner conclusions must drive
-  `record_decision` outcomes. That coupling is still an open deepening
-  question; do not treat the current boolean flags as locked.
+- `record_decision` reads `HighRiskFlag` / `ThinCreditHistory` on the
+  Application, writes `RequiresManualReview`, and sets Decision outcomes
+  from those facts. It does not accept a parallel boolean override.
+  Import form checkboxes and `policy_facts.json` are premise input, not
+  a skip around the rule.

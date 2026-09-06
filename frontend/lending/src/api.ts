@@ -48,6 +48,8 @@ export type ImportResult = {
   application_id?: string;
   entity_count?: number | string;
   decisions?: unknown;
+  flow_run_id?: string;
+  status?: string;
   error?: string;
 };
 
@@ -125,6 +127,15 @@ export async function importApplication(form: FormData): Promise<ImportResult> {
   const body = await readJson<ImportResult>(response);
   if (!response.ok) {
     throw new Error(body.error || "导入失败");
+  }
+  return body;
+}
+
+export async function getImportJob(flowRunId: string): Promise<ImportResult> {
+  const response = await fetch(lendingApi(`/api/lending/jobs/${encodeURIComponent(flowRunId)}`));
+  const body = await readJson<ImportResult>(response);
+  if (!response.ok) {
+    throw new Error(body.error || "查询导入任务失败");
   }
   return body;
 }

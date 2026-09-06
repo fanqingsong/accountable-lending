@@ -1,44 +1,28 @@
 """Unit tests for case scoping and application attachment."""
 
-from backend.pipeline import (
-    apply_payload,
+from pathlib import Path
+
+from backend.application import (
+    HIGH_RISK_FLAG,
+    REQUIRES_MANUAL_REVIEW,
+    THIN_CREDIT_HISTORY,
     attach_case,
     attach_decision_chain,
     ensure_seed_application,
     list_applications,
-    reason,
+    load_policy_facts,
+    policy_facts_from_graph,
     reason_subject,
-    record_decision_chain,
-    scope_build_result,
-    scope_id,
     slugify,
-    to_nodes_edges,
 )
+from lending_prefect.attach import apply_payload
+from lending_prefect.decide import record_decision_chain
 
 
 def test_slugify_and_reason_subject():
     assert slugify("Harbor Bakehouse Pvt Ltd") == "harbor-bakehouse-pvt-ltd"
     assert reason_subject("Harbor Bakehouse Pvt Ltd") == "HarborBakehousePvtLtd"
     assert slugify("!!!") == "application"
-
-
-def test_scope_id_is_idempotent():
-    assert scope_id("harbor", "Priya") == "harbor::Priya"
-    assert scope_id("harbor", "harbor::Priya") == "harbor::Priya"
-
-
-def test_scope_build_result_prefixes_endpoints_and_stamps_application_id():
-    scoped = scope_build_result(
-        {
-            "entities": [{"id": "A", "text": "Harbor", "type": "ORG"}],
-            "relationships": [{"source": "A", "target": "A", "type": "related_to"}],
-        },
-        "harbor",
-    )
-    assert scoped["entities"][0]["id"] == "harbor::A"
-    assert scoped["entities"][0]["metadata"]["application_id"] == "harbor"
-    assert scoped["relationships"][0]["source"] == "harbor::A"
-    assert scoped["relationships"][0]["target"] == "harbor::A"
 
 
 class FakeGraph:
@@ -132,55 +116,59 @@ def test_list_applications_reads_properties_shape():
     assert listed[0]["name"] == "Oak Mill"
 
 
-def test_to_nodes_edges_translates_vocabulary():
-    build_result = {
-        "entities": [
-            {
-                "id": "ent-1",
-                "type": "Business",
-                "text": "Sunrise Coffee Roasters",
-                "confidence": 0.95,
-            },
-            {"id": "ent-2", "type": "Location", "text": "Kochi"},
-        ],
-        "relationships": [
-            {"source": "ent-1", "target": "ent-2", "type": "located_in", "weight": 0.8},
-            {"source": "ent-2", "target": "ent-1", "type": "relates_to"},
-        ],
+def test_load_policy_facts_reads_sidecar(tmp_path):
+    notes = tmp_path / "risk_notes.txt"
+    notes.write_text("notes", encoding="utf-8")
+    (tmp_path / "policy_facts.json").write_text(
+        '{"HighRiskFlag": true, "ThinCreditHistory": false}',
+        encoding="utf-8",
+    )
+    assert load_policy_facts([notes]) == {
+        HIGH_RISK_FLAG: True,
+        THIN_CREDIT_HISTORY: False,
     }
 
-    out = to_nodes_edges(build_result)
 
-    assert out["nodes"][0] == {
-        "id": "ent-1",
-        "type": "Business",
-        "content": "Sunrise Coffee Roasters",
-        "metadata": {"confidence": 0.95},
-    }
-    assert out["nodes"][1]["metadata"] == {"confidence": 1.0}
-    assert out["edges"][0] == {
-        "source": "ent-1",
-        "target": "ent-2",
-        "type": "located_in",
-        "weight": 0.8,
-    }
-    assert out["edges"][1]["weight"] == 1.0
+def test_record_decision_chain_writes_requires_manual_review():
+    graph = FakeDecideGraph()
+    record_decision_chain(graph, "sunrise-coffee", "Sunrise Coffee Roasters LLC")
+    assert policy_facts_from_graph(graph, "sunrise-coffee")[REQUIRES_MANUAL_REVIEW] is True
 
 
-def test_to_nodes_edges_empty_input():
-    assert to_nodes_edges({}) == {"nodes": [], "edges": []}
-
-
-def test_reason_derives_manual_review():
-    conclusions = reason(object(), subject="SunriseCoffeeRoasters")
-    assert "RequiresManualReview(SunriseCoffeeRoasters)" in conclusions
+def test_record_decision_chain_clears_requires_manual_review_when_thin_credit_absent():
+    graph = FakeDecideGraph(
+        application_id="cedar-mill",
+        **{
+            HIGH_RISK_FLAG: True,
+            THIN_CREDIT_HISTORY: False,
+            REQUIRES_MANUAL_REVIEW: True,
+        },
+    )
+    record_decision_chain(graph, "cedar-mill", "Cedar Mill Furniture Pvt Ltd")
+    facts = policy_facts_from_graph(graph, "cedar-mill")
+    assert facts[HIGH_RISK_FLAG] is True
+    assert facts[REQUIRES_MANUAL_REVIEW] is False
 
 
 class FakeDecideGraph:
-    def __init__(self):
+    def __init__(self, application_id="sunrise-coffee", **facts):
         self.decision_calls = []
         self.edges = []
         self.nodes = [{"id": f"entity-{i}", "type": "ORG"} for i in range(8)]
+        self.nodes.append(
+            {
+                "id": f"{application_id}::application",
+                "type": "Application",
+                "content": "Sunrise Coffee Roasters LLC",
+                "metadata": {
+                    "application_id": application_id,
+                    HIGH_RISK_FLAG: True,
+                    THIN_CREDIT_HISTORY: True,
+                    REQUIRES_MANUAL_REVIEW: True,
+                    **facts,
+                },
+            }
+        )
 
     def to_dict(self):
         return {"nodes": self.nodes}
@@ -214,14 +202,19 @@ def test_record_decision_chain_records_caused_and_has_decision():
 
 
 def test_record_decision_chain_uses_applicant_entity_ids_and_approval_path():
-    graph = FakeDecideGraph()
+    graph = FakeDecideGraph(
+        application_id="harbor",
+        **{
+            HIGH_RISK_FLAG: False,
+            THIN_CREDIT_HISTORY: False,
+            REQUIRES_MANUAL_REVIEW: False,
+        },
+    )
     decisions = record_decision_chain(
         graph,
         "harbor",
         "Harbor Bakehouse Pvt Ltd",
         entity_ids=["harbor::Priya"],
-        high_risk=False,
-        thin_credit=False,
     )
 
     assert graph.decision_calls[0]["entities"] == ["harbor::Priya"]
@@ -232,6 +225,35 @@ def test_record_decision_chain_uses_applicant_entity_ids_and_approval_path():
         "approved",
     ]
     assert set(decisions) == {"risk_classification", "policy_check", "final_decision"}
+
+
+def test_record_decision_chain_follows_cedar_mill_facts():
+    graph = FakeDecideGraph(
+        application_id="cedar-mill",
+        **{
+            HIGH_RISK_FLAG: True,
+            THIN_CREDIT_HISTORY: False,
+            REQUIRES_MANUAL_REVIEW: False,
+        },
+    )
+    record_decision_chain(graph, "cedar-mill", "Cedar Mill Furniture Pvt Ltd")
+    assert [call["outcome"] for call in graph.decision_calls] == [
+        "high_risk",
+        "policy_cleared",
+        "approved",
+    ]
+
+
+def test_cedar_mill_sidecar_declares_high_risk_without_thin_credit():
+    pack = Path(__file__).resolve().parent.parent / "data" / "samples" / "cedar-mill"
+    facts = load_policy_facts(sorted(pack.glob("*.txt")))
+    assert facts == {HIGH_RISK_FLAG: True, THIN_CREDIT_HISTORY: False}
+
+
+def test_application_module_does_not_import_prefect():
+    package = Path(__file__).resolve().parent.parent / "backend" / "application"
+    for path in package.glob("*.py"):
+        assert "prefect" not in path.read_text(encoding="utf-8").lower(), path
 
 
 def test_attach_case_stamps_document_body():

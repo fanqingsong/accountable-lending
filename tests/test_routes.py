@@ -86,7 +86,7 @@ def test_import_api_returns_json_success(monkeypatch):
         data={"applicant_name": "Harbor Bakehouse Pvt Ltd"},
         files={"files": ("notes.txt", b"hello", "text/plain")},
     )
-    assert response.status_code == 200
+    assert response.status_code == 202
     body = response.json()
     assert body["application_id"] == "harbor-bakery"
     assert "error" not in body
@@ -105,6 +105,48 @@ def test_import_api_returns_json_error(monkeypatch):
     )
     assert response.status_code == 400
     assert response.json() == {"error": "application already exists: harbor-bakery"}
+
+
+def test_import_job_reloads_graph_when_completed(monkeypatch):
+    class ReloadSession:
+        def __init__(self, graph):
+            self.graph = graph
+            self.reloads = 0
+
+        def reload_graph(self):
+            self.reloads += 1
+
+    session = ReloadSession(FakeGraph())
+    monkeypatch.setattr(
+        "backend.routes.read_application_job",
+        lambda flow_run_id: {
+            "flow_run_id": flow_run_id,
+            "status": "COMPLETED",
+            "application_id": "harbor-bakery",
+            "decisions": {"final_decision": "d1"},
+        },
+    )
+    monkeypatch.setattr(
+        "backend.routes.retrieve",
+        lambda graph, query, store=None: {
+            "query": query,
+            "chunks": [],
+            "decisions": [],
+            "caused": [],
+            "entities": [],
+        },
+    )
+    monkeypatch.setattr(
+        "backend.routes.answer",
+        lambda graph, query, store=None: {"query": query, "answer": "x", "source": "extractive"},
+    )
+    app = FastAPI()
+    attach_lending_routes(app, session)
+    client = TestClient(app)
+    response = client.get("/api/lending/jobs/run-1")
+    assert response.status_code == 200
+    assert response.json()["application_id"] == "harbor-bakery"
+    assert session.reloads == 1
 
 
 def test_retrieve_and_chat_apis_are_json(monkeypatch):

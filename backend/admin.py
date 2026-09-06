@@ -9,14 +9,11 @@ from __future__ import annotations
 
 import os
 import sys
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-GRAPH_JSON = ROOT / "exports" / "lending_graph.json"
+from backend.paths import GRAPH_JSON
+from backend.snapshot import load_or_build_graph, note as _note
 
-
-def _note(message: str) -> None:
-    print(f"    {message}", flush=True)
+__all__ = ["GRAPH_JSON", "load_or_build_graph", "load_snapshot_session", "main"]
 
 
 def load_snapshot_session():
@@ -28,26 +25,6 @@ def load_snapshot_session():
     session = GraphSession.from_file(str(GRAPH_JSON))
     _note(f"Explorer loaded snapshot {GRAPH_JSON}")
     return session
-
-
-def load_or_build_graph():
-    """Return a ContextGraph: rebuild the pipeline, or reload the saved JSON."""
-    from backend.pipeline import ensure_seed_application
-
-    rebuild = os.environ.get("LENDING_REBUILD", "").strip().lower() in {"1", "true", "yes"}
-    if GRAPH_JSON.is_file() and not rebuild:
-        from semantica.context import ContextGraph
-
-        graph = ContextGraph()
-        graph.load_from_file(str(GRAPH_JSON))
-        _note(f"loaded graph from {GRAPH_JSON}")
-        ensure_seed_application(graph)
-        return graph
-
-    from backend.pipeline import build_seed_graph
-
-    _note("running lending pipeline (ingest → decide → export)")
-    return build_seed_graph()
 
 
 def main() -> None:

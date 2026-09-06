@@ -25,13 +25,13 @@ if [[ "${ready}" -ne 1 ]]; then
 fi
 docker compose exec -T ollama ollama pull "${OLLAMA_MODEL}"
 
-echo "Building Neo4j + Qdrant + Ollama + lending-api + lending-ui + Explorer..."
+echo "Building Neo4j + Qdrant + Ollama + Prefect + lending-api + lending-ui + Explorer..."
 echo "  Explorer:      http://localhost:8000"
 echo "  lending-api:   http://localhost:8001/api/lending/applications"
 echo "  Case import:   http://localhost:8080/lending"
 echo "  Retrieve:      http://localhost:8080/lending/retrieve"
 echo "  Chat:          http://localhost:8080/lending/chat"
 echo "  Ontology:      http://localhost:8080/lending/ontology"
+echo "  Prefect UI:    http://localhost:4200"
 echo "  Neo4j Browser: http://localhost:7474  (neo4j / lending-demo)"
-echo "  CLI demo only: docker compose --profile cli up --build --abort-on-container-exit demo"
-docker compose up --build explorer lending-api lending-ui ollama
+docker compose up --build explorer lending-api lending-ui ollama prefect-server prefect-worker

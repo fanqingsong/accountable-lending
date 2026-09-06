@@ -1,0 +1,23 @@
+---
+description: Modular packages, KISS, and DRY for all generated code
+alwaysApply: true
+---
+
+# Modular / KISS / DRY
+
+Full decision: `docs/adr/0010-modular-kiss-dry.md`. Lenses: ADR-0000.
+Layout: `AGENT.md`. Words: `CONTEXT.md`.
+
+- **Modular:** name modules after CONTEXT terms. Keep public imports
+  (`backend.application`, `backend.retrieve`, `backend.ontology`).
+  Do not add `app/`, `services/`, `use_cases/`, `repositories/`, `domain/`.
+  Split only when two reasons to change already share a file. Deletion
+  test: no pass-through packages.
+- **KISS:** extend an existing module before creating a package. No
+  seam/factory/config for one adapter. Surgical diffs. Do not rename
+  `CAUSED`, scoped ids, or Decision categories.
+- **DRY:** one source — `ontology/lending.json`, `backend/paths.py`,
+  `backend/context_graph.py`, policy facts in `backend/application/`,
+  retrieve evidence in `backend/retrieve/`. Do not extract a one-use
+  helper. Do not share across a seam that must stay independent
+  (Application stays Prefect-free).

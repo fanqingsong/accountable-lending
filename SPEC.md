@@ -19,28 +19,31 @@ decisions, and their causal edges.
 1. **Ingest** — three plain-text applicant documents via `FileIngestor`
 2. **Extract** — local spaCy NER + pattern relations via `GraphBuilder.build`
 3. **Graph** — `ContextGraph.from_dict` (vocab: nodes/edges)
-4. **Reason** — `Reasoner` forward-chains
-   `HighRiskFlag(X) AND ThinCreditHistory(X) => RequiresManualReview(X)`
-5. **Decide** — three `ContextGraph.record_decision()` calls, linked with
+4. **Reason** — `record_decision` applies whether Application `HighRiskFlag` /
+   `ThinCreditHistory` would derive `RequiresManualReview`
+5. **Decide** — three `ContextGraph.record_decision()` calls that write
+   `RequiresManualReview` from those flags and record outcomes, linked with
    explicit `CAUSED` edges (the uppercase type the causal traverser matches)
 6. **Audit** — `get_causal_chain(direction="upstream")` +
-   `find_precedents()`, printed as the trail
+   `find_precedents()`, exposed via retrieve / chat
 7. **Export** — `ContextGraph.save_to_file` JSON for Explorer; MERGE into
-   Neo4j when `NEO4J_URI` is set; optional `RDFExporter` (Turtle) after
-   minting stable IRIs, then `_run_pyshacl` against generated shapes
+   Neo4j when `NEO4J_URI` is set
 
 ## Admin UI (phase 0)
 
 `python -m backend.admin` / Compose service `explorer` loads the
 ContextGraph snapshot and serves Semantica Knowledge Explorer on `:8000`.
-`python -m backend.api` / `lending-api` owns rebuild, persist, and JSON
-on `:8001`. Instance data is LPG in Neo4j. Turtle is a compliance export,
-not the runtime store. See [ADR-0006](docs/adr/0006-three-http-adapters.md).
+`python -m backend.api` / `lending-api` loads the ContextGraph snapshot
+and serves JSON on `:8001`. Seed rebuild and import run
+`application_flow` ([ADR-0009](docs/adr/0009-prefect-orchestrates-application.md)).
+Instance data is LPG in Neo4j. Turtle is a compliance export, not the
+runtime store. See [ADR-0006](docs/adr/0006-three-http-adapters.md).
 
 ## Case import (phase 1)
 
-`GET http://localhost:8080/lending` serves the import UI (React SPA). `POST /api/lending/import` uploads
-applicant files and returns JSON. Each case is scoped with
+`GET http://localhost:8080/lending` serves the import UI (React SPA).
+`POST /api/lending/import` uploads applicant files and returns `202` with
+a `flow_run_id`; the UI polls `GET /api/lending/jobs/{id}`. Each case is scoped with
 `{application_id}::` entity ids and an `Application` node (`CONTAINS` /
 `HAS_DOCUMENT` / `HAS_DECISION`). Sunrise remains the seed case
 (`sunrise-coffee`). A second fictional pack is `data/samples/harbor-bakery/`.
@@ -81,7 +84,7 @@ extracts, and never records a decision.
 
 - Design principles (Clean Architecture, DDD, SOLID as lenses):
   [ADR-0000](docs/adr/0000-meta-design-principles.md)
-- `SEMANTICA_DISABLE_PROGRESS=1` set inside `main()`/notebook so progress
+- `SEMANTICA_DISABLE_PROGRESS=1` set inside `main()` so progress
   bars do not drown the audit-trail narrative
 - Entity ids are minted as `https://example.org/lending#<slug>` at export
   time only (free-text ids are not valid RDF subjects; deterministic
@@ -106,10 +109,7 @@ extracts, and never records a decision.
 
 ## Verification
 
-- `python -m demo` exits 0 with all seven stage banners, JSON export, and
-  the SHACL conformance line
 - `python -m pytest tests/ -q` green; `-m integration` green
-- `demo/demo.ipynb` executes top-to-bottom with the same results
 - Compose `explorer` serves Explorer at `:8000` after `lending-api` is healthy
 - `GET http://localhost:8080/lending/retrieve` answers “为什么转人工” with risk-note chunks and the
   `risk_classification → policy_check → final_decision` CAUSED chain

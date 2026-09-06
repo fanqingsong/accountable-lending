@@ -13,13 +13,14 @@ COPY docker/en_core_web_sm-3.8.0-py3-none-any.whl /tmp/
 RUN pip install --no-cache-dir /tmp/en_core_web_sm-3.8.0-py3-none-any.whl \
     && rm /tmp/en_core_web_sm-3.8.0-py3-none-any.whl
 
-COPY demo/ demo/
 COPY backend/ backend/
+COPY prefect/ prefect/
 COPY frontend/ frontend/
 COPY data/ data/
 COPY ontology/ ontology/
 
 ENV SEMANTICA_DISABLE_PROGRESS=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/prefect:/app
 
-CMD ["python", "-m", "demo"]
+CMD ["python", "-m", "backend.api"]

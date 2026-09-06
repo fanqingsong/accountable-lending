@@ -13,8 +13,9 @@ from fastapi.responses import JSONResponse
 
 from backend.chat import answer
 from backend.import_service import LendingImportError, import_application
+from backend.prefect_api import read_application_job
 from backend.ontology import schema_public, validate_graph
-from backend.pipeline import list_applications
+from backend.application import list_applications
 from backend.retrieve import retrieve
 
 _DEFAULT_CORS = (
@@ -63,7 +64,7 @@ def attach_lending_routes(app, session, vector_store=None):
                 continue
             uploads.append({"filename": filename, "content": await upload.read()})
         try:
-            return import_application(
+            body = import_application(
                 session.graph,
                 files=uploads,
                 applicant_name=applicant_name,
@@ -75,6 +76,19 @@ def attach_lending_routes(app, session, vector_store=None):
             )
         except LendingImportError as exc:
             return JSONResponse({"error": str(exc)}, status_code=400)
+        if str(body.get("status") or "").upper() == "COMPLETED":
+            reloader = getattr(session, "reload_graph", None)
+            if callable(reloader):
+                reloader()
+        return JSONResponse(body, status_code=202)
+
+    async def import_job(flow_run_id: str):
+        body = read_application_job(flow_run_id)
+        if str(body.get("status") or "").upper() == "COMPLETED":
+            reloader = getattr(session, "reload_graph", None)
+            if callable(reloader):
+                reloader()
+        return body
 
     async def retrieve_api(request: Request):
         body = await request.json()
@@ -94,6 +108,7 @@ def attach_lending_routes(app, session, vector_store=None):
 
     app.add_api_route("/api/lending/applications", list_apps, methods=["GET"])
     app.add_api_route("/api/lending/import", import_app, methods=["POST"])
+    app.add_api_route("/api/lending/jobs/{flow_run_id}", import_job, methods=["GET"])
     app.add_api_route("/api/lending/retrieve", retrieve_api, methods=["POST"])
     app.add_api_route("/api/lending/chat", chat_api, methods=["POST"])
     app.add_api_route("/api/lending/ontology", ontology_api, methods=["GET"])

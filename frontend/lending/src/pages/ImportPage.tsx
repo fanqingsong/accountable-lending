@@ -3,7 +3,44 @@ import { Link } from "react-router-dom";
 import { Alert, Button, Checkbox, Form, Input, Table, Typography, Upload } from "antd";
 import { InboxOutlined } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
-import { EXPLORER_URL, importApplication, listApplications, type ApplicationRow } from "../api";
+import {
+  EXPLORER_URL,
+  getImportJob,
+  importApplication,
+  listApplications,
+  type ApplicationRow,
+  type ImportResult,
+} from "../api";
+
+const PENDING = new Set(["SCHEDULED", "PENDING", "RUNNING", "AWAITINGRETRY", "LATE"]);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+async function waitForImport(submitted: ImportResult): Promise<ImportResult> {
+  let job = submitted;
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    const status = String(job.status || "").toUpperCase();
+    if (status === "COMPLETED") {
+      return job;
+    }
+    if (status === "FAILED" || status === "CRASHED" || status === "CANCELLED") {
+      throw new Error(job.error || `导入失败（${status}）`);
+    }
+    if (!job.flow_run_id) {
+      throw new Error("导入未返回 flow_run_id");
+    }
+    if (attempt > 0 && !PENDING.has(status) && status) {
+      throw new Error(job.error || `导入失败（${status}）`);
+    }
+    await sleep(1000);
+    job = await getImportJob(job.flow_run_id);
+  }
+  throw new Error("导入超时");
+}
 
 const ACCEPT = ".txt,.pdf,.docx,.md";
 
@@ -49,7 +86,7 @@ export function ImportPage() {
     setLoading(true);
     setMessage(null);
     try {
-      const body = await importApplication(data);
+      const body = await waitForImport(await importApplication(data));
       const count = Array.isArray(body.decisions)
         ? body.decisions.length
         : Object.keys(body.decisions || {}).length;
@@ -108,7 +145,8 @@ export function ImportPage() {
           <Checkbox>信贷记录薄（无银行还款记录）</Checkbox>
         </Form.Item>
         <Typography.Paragraph type="secondary">
-          两项都勾选时，规则会推出 RequiresManualReview，并转人工审；否则记录为通过。
+          勾选的是写入 Application 的前提（HighRiskFlag / ThinCreditHistory）。规则读图后若推出
+          RequiresManualReview 才转人工审。若上传 <code>policy_facts.json</code>，以文件为准。
         </Typography.Paragraph>
         <Button type="primary" htmlType="submit" loading={loading}>
           导入并写入图谱

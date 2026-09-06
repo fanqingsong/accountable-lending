@@ -7,7 +7,6 @@ venv/
 exports/
 .git/
 .gitignore
-demo/demo.ipynb
 tests/
 README.md
 SPEC.md

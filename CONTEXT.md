@@ -60,9 +60,13 @@ _Avoid_: CONTAINS as the canonical name
 Upstream walk of **CAUSED** plus precedents that explain a final Decision.
 _Avoid_: generated narrative, a chat paragraph as evidence
 
+**HighRiskFlag** / **ThinCreditHistory**:
+Policy premises stored on the Application (pack `policy_facts.json`, or the import form). They are not node types.
+_Avoid_: injecting these as in-memory Reasoner facts that never hit the graph
+
 **RequiresManualReview**:
-The fact derived by `HighRiskFlag(X) AND ThinCreditHistory(X)`. The seed Application's final outcome is referred to manual review. Whether reasoner conclusions must drive `record_decision` outcomes is still open ([ADR-0005](docs/adr/0005-caused-decision-chain.md)); do not treat today's boolean flags as locked semantics.
-_Avoid_: locking the current flags as the rule–Decision contract
+The fact `record_decision` derives by `HighRiskFlag(X) AND ThinCreditHistory(X)` and writes onto the Application before recording `policy_check` / `final_decision`. It does not take a parallel boolean override.
+_Avoid_: a decide-path switch that bypasses the graph fact
 
 ### Runtime vs export
 
@@ -85,6 +89,7 @@ _Avoid_: a second required-field list in Python; OWL as the live editor
 ## Relationships
 
 - An **Application** has exactly one **application_id**.
+- An **Application** may carry **HighRiskFlag**, **ThinCreditHistory**, and **RequiresManualReview** as properties; they are not separate node types.
 - An **Application** has zero or more **Documents** (`HAS_DOCUMENT`).
 - An **Application** that completes decide has exactly three **Decisions** (`HAS_DECISION`), one per category in the **Decision chain**.
 - Adjacent **Decisions** in that chain are linked by **CAUSED**.

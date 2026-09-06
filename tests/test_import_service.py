@@ -1,13 +1,15 @@
 """Tests for upload validation and duplicate application rejection."""
 
-import json
+from pathlib import Path
 
 from backend.import_service import LendingImportError, import_application, safe_filename
-from backend.pipeline import apply_payload, write_graph_snapshot
+from lending_prefect.attach import apply_payload
+from lending_prefect.snapshot import write_graph_snapshot
 
 
 def test_safe_filename_rejects_bad_types_and_paths():
     assert safe_filename("notes.txt") == "notes.txt"
+    assert safe_filename("policy_facts.json") == "policy_facts.json"
     try:
         safe_filename("../secret.pdf")
     except LendingImportError:
@@ -54,7 +56,6 @@ def test_import_application_rejects_duplicate(tmp_path, monkeypatch):
     snap.write_text('{"keep":true}', encoding="utf-8")
     monkeypatch.setattr("backend.import_service.UPLOADS", tmp_path)
     monkeypatch.setattr("backend.import_service.GRAPH_JSON", snap)
-    monkeypatch.setattr("backend.stores.persist_graph", lambda graph: {"skipped": True})
 
     try:
         import_application(
@@ -69,26 +70,24 @@ def test_import_application_rejects_duplicate(tmp_path, monkeypatch):
     assert snap.read_text(encoding="utf-8") == '{"keep":true}'
 
 
-def test_import_application_writes_files_and_calls_apply_case(tmp_path, monkeypatch):
+def test_import_application_writes_files_and_submits_flow(tmp_path, monkeypatch):
     graph = FakeGraph()
     called = {}
 
-    def fake_apply_case(graph, paths, application_id, applicant_name, high_risk, thin_credit):
-        called["paths"] = [str(path) for path in paths]
-        called["application_id"] = application_id
-        called["high_risk"] = high_risk
+    def fake_submit(**kwargs):
+        called.update(kwargs)
         return {
-            "application_id": application_id,
-            "applicant_name": applicant_name,
+            "application_id": kwargs["application_id"],
+            "applicant_name": kwargs["applicant_name"],
+            "flow_run_id": "local-1",
+            "status": "COMPLETED",
             "entity_count": 2,
             "decisions": {"final_decision": "d1"},
-            "document_names": ["a.txt"],
         }
 
     monkeypatch.setattr("backend.import_service.UPLOADS", tmp_path)
     monkeypatch.setattr("backend.import_service.GRAPH_JSON", tmp_path / "g.json")
-    monkeypatch.setattr("backend.import_service.apply_case", fake_apply_case)
-    monkeypatch.setattr("backend.stores.persist_graph", lambda graph: {"skipped": True})
+    monkeypatch.setattr("backend.prefect_api.submit_application_run", fake_submit)
 
     result = import_application(
         graph,
@@ -98,110 +97,46 @@ def test_import_application_writes_files_and_calls_apply_case(tmp_path, monkeypa
         thin_credit=False,
     )
     assert result["application_id"] == "harbor-bakehouse-pvt-ltd"
+    assert result["flow_run_id"] == "local-1"
     assert (tmp_path / "harbor-bakehouse-pvt-ltd" / "a.txt").read_bytes() == b"hello"
-    assert called["high_risk"] is False
-    assert (tmp_path / "g.json").is_file()
+    assert called["policy_facts"] == {"HighRiskFlag": False, "ThinCreditHistory": False}
+    assert called["paths"][0].endswith("a.txt")
 
 
-def test_import_writes_reloadable_snapshot_with_scoped_caused_chain(tmp_path, monkeypatch):
+def test_import_prefers_uploaded_policy_facts_json(tmp_path, monkeypatch):
     graph = FakeGraph()
-    snap = tmp_path / "lending_graph.json"
+    called = {}
 
-    def fake_apply_case(graph, paths, application_id, applicant_name, high_risk, thin_credit):
-        graph.nodes = [
-            {
-                "id": f"{application_id}::application",
-                "type": "Application",
-                "content": applicant_name,
-                "metadata": {"application_id": application_id},
-            },
-            {
-                "id": f"{application_id}::d-risk",
-                "type": "Decision",
-                "metadata": {"category": "risk_classification", "outcome": "high_risk"},
-            },
-            {
-                "id": f"{application_id}::d-policy",
-                "type": "Decision",
-                "metadata": {"category": "policy_check", "outcome": "manual_review_required"},
-            },
-            {
-                "id": f"{application_id}::d-final",
-                "type": "Decision",
-                "metadata": {"category": "final_decision", "outcome": "referred_to_manual_review"},
-            },
-        ]
-        graph.edges = [
-            (f"{application_id}::d-risk", f"{application_id}::d-policy", "CAUSED"),
-            (f"{application_id}::d-policy", f"{application_id}::d-final", "CAUSED"),
-        ]
+    def fake_submit(**kwargs):
+        called.update(kwargs)
         return {
-            "application_id": application_id,
-            "applicant_name": applicant_name,
-            "entity_count": 1,
-            "decisions": {"final_decision": f"{application_id}::d-final"},
+            "application_id": kwargs["application_id"],
+            "applicant_name": kwargs["applicant_name"],
+            "flow_run_id": "local-2",
+            "status": "COMPLETED",
         }
 
     monkeypatch.setattr("backend.import_service.UPLOADS", tmp_path)
-    monkeypatch.setattr("backend.import_service.GRAPH_JSON", snap)
-    monkeypatch.setattr("backend.import_service.apply_case", fake_apply_case)
-    monkeypatch.setattr("backend.stores.persist_graph", lambda graph: {"skipped": True})
-    monkeypatch.setattr(
-        "backend.ontology.validate_graph",
-        lambda graph, application_id=None: {"conforms": True, "violations": [], "checked": 4},
-    )
+    monkeypatch.setattr("backend.import_service.GRAPH_JSON", tmp_path / "g.json")
+    monkeypatch.setattr("backend.prefect_api.submit_application_run", fake_submit)
 
-    import_application(
+    result = import_application(
         graph,
-        files=[{"filename": "a.txt", "content": b"notes"}],
-        applicant_name="Harbor Bakehouse Pvt Ltd",
-        application_id="harbor-bakery",
+        files=[
+            {"filename": "a.txt", "content": b"hello"},
+            {
+                "filename": "policy_facts.json",
+                "content": b'{"HighRiskFlag": true, "ThinCreditHistory": false}',
+            },
+        ],
+        applicant_name="Cedar Mill Furniture Pvt Ltd",
+        application_id="cedar-mill",
+        high_risk=True,
+        thin_credit=True,
     )
-    loaded = json.loads(snap.read_text(encoding="utf-8"))
-    ids = {node["id"] for node in loaded["nodes"]}
-    assert "harbor-bakery::application" in ids
-    assert all(node_id.startswith("harbor-bakery::") for node_id in ids)
-    assert ["harbor-bakery::d-risk", "harbor-bakery::d-policy", "CAUSED"] in loaded["edges"]
-
-    reloaded = FakeGraph()
-    reloaded.nodes = json.loads(snap.read_text(encoding="utf-8"))["nodes"]
-    reloaded.edges = [tuple(edge) for edge in json.loads(snap.read_text(encoding="utf-8"))["edges"]]
-    assert any(node["metadata"].get("application_id") == "harbor-bakery" for node in reloaded.nodes)
-
-
-def test_schema_failure_does_not_replace_snapshot(tmp_path, monkeypatch):
-    graph = FakeGraph()
-    snap = tmp_path / "g.json"
-    snap.write_text('{"nodes":[{"id":"keep"}],"edges":[]}', encoding="utf-8")
-
-    def fake_apply_case(*args, **kwargs):
-        graph.nodes = [{"id": "broken", "type": "Decision"}]
-        return {"application_id": "harbor-bakery", "applicant_name": "H"}
-
-    monkeypatch.setattr("backend.import_service.UPLOADS", tmp_path)
-    monkeypatch.setattr("backend.import_service.GRAPH_JSON", snap)
-    monkeypatch.setattr("backend.import_service.apply_case", fake_apply_case)
-    monkeypatch.setattr("backend.stores.persist_graph", lambda graph: {"skipped": True})
-    monkeypatch.setattr(
-        "backend.ontology.validate_graph",
-        lambda graph, application_id=None: {
-            "conforms": False,
-            "violations": [{"message": "Decision.category missing"}],
-            "checked": 1,
-        },
-    )
-
-    try:
-        import_application(
-            graph,
-            files=[{"filename": "a.txt", "content": b"x"}],
-            applicant_name="Harbor Bakehouse Pvt Ltd",
-            application_id="harbor-bakery",
-        )
-        raise AssertionError("schema failure should raise")
-    except LendingImportError as exc:
-        assert "schema" in str(exc)
-    assert json.loads(snap.read_text(encoding="utf-8"))["nodes"][0]["id"] == "keep"
+    assert result["application_id"] == "cedar-mill"
+    assert called["policy_facts"] == {"HighRiskFlag": True, "ThinCreditHistory": False}
+    assert any(Path(path).name == "policy_facts.json" for path in called["paths"])
 
 
 def test_write_graph_snapshot_leaves_old_file_when_save_fails(tmp_path):
