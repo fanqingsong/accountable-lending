@@ -1,6 +1,6 @@
 """Schema validation and Neo4j constraint helpers."""
 
-from app.ontology import apply_schema_constraints, validate_graph
+from backend.ontology import apply_schema_constraints, validate_graph
 
 
 class FakeGraph:

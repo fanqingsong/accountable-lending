@@ -1,0 +1,27 @@
+---
+description: Where new lending code goes; do not invent a folder tree
+globs: backend/**/*.py,frontend/lending/**
+alwaysApply: false
+---
+
+# Placement
+
+Do not invent a new tree. Full map: `AGENT.md` (Layout + Placement).
+Domain names: `CONTEXT.md`. Lenses, not folders: ADR-0000.
+
+```text
+# BAD — new package or HTML in the API
+app/pipeline.py
+backend/services/decision_service.py
+backend/pages/chat.html
+
+# GOOD — existing seams
+backend/pipeline.py          # Application / Decision / CAUSED
+backend/routes.py            # /api/lending/* JSON only
+frontend/lending/src/        # React UI calls the JSON API
+demo/                        # python -m demo — CLI adapter only
+```
+
+- New capability = JSON route + client in `frontend/lending/`.
+- Tests stay in `tests/test_*.py` against those seams.
+- Do not add `app/`, `services/`, `use_cases/`, `repositories/`, `domain/`.

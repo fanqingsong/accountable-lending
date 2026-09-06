@@ -1,7 +1,7 @@
-"""Tests for demo.py's pure helper functions.
+"""Tests for demo package helper functions.
 
-These are fast and deterministic; they never import semantica (demo.py only
-imports semantica inside its stage functions).
+These are fast and deterministic; they never import semantica (the demo
+package only imports semantica inside its stage functions).
 """
 
 import copy
@@ -45,52 +45,6 @@ def test_iri_for_non_string_input_and_determinism():
     second = demo._iri_for(123)
     assert first == "https://example.org/lending#123"
     assert first == second
-
-
-# ---------------------------------------------------------------------------
-# _to_nodes_edges
-# ---------------------------------------------------------------------------
-
-
-def test_to_nodes_edges_translates_vocabulary():
-    build_result = {
-        "entities": [
-            {
-                "id": "ent-1",
-                "type": "Business",
-                "text": "Sunrise Coffee Roasters",
-                "confidence": 0.95,
-            },
-            {"id": "ent-2", "type": "Location", "text": "Kochi"},
-        ],
-        "relationships": [
-            {"source": "ent-1", "target": "ent-2", "type": "located_in", "weight": 0.8},
-            {"source": "ent-2", "target": "ent-1", "type": "relates_to"},
-        ],
-    }
-
-    out = demo._to_nodes_edges(build_result)
-
-    assert out["nodes"][0] == {
-        "id": "ent-1",
-        "type": "Business",
-        "content": "Sunrise Coffee Roasters",
-        "metadata": {"confidence": 0.95},
-    }
-    # default confidence applied when absent
-    assert out["nodes"][1]["metadata"] == {"confidence": 1.0}
-    assert out["edges"][0] == {
-        "source": "ent-1",
-        "target": "ent-2",
-        "type": "located_in",
-        "weight": 0.8,
-    }
-    # default weight applied when absent
-    assert out["edges"][1]["weight"] == 1.0
-
-
-def test_to_nodes_edges_empty_input():
-    assert demo._to_nodes_edges({}) == {"nodes": [], "edges": []}
 
 
 # ---------------------------------------------------------------------------

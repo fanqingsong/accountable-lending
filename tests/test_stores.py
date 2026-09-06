@@ -1,6 +1,6 @@
 """Unit tests for Neo4j persist helpers. No running database required."""
 
-from app.stores import (
+from backend.stores import (
     _graph_payload,
     _node_props,
     _safe_label,

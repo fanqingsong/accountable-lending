@@ -7,3 +7,5 @@ exports/
 .ipynb_checkpoints/
 .playwright-mcp/
 docker/*.whl
+node_modules/
+frontend/lending/dist/

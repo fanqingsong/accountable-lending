@@ -31,38 +31,43 @@ decisions, and their causal edges.
 
 ## Admin UI (phase 0)
 
-`python -m app.admin` / Compose service `admin` loads the JSON (or rebuilds
-the pipeline) and serves Semantica Knowledge Explorer. Instance data is LPG
-in Neo4j. Turtle is a compliance export, not the runtime store.
+`python -m backend.admin` / Compose service `explorer` loads the
+ContextGraph snapshot and serves Semantica Knowledge Explorer on `:8000`.
+`python -m backend.api` / `lending-api` owns rebuild, persist, and JSON
+on `:8001`. Instance data is LPG in Neo4j. Turtle is a compliance export,
+not the runtime store. See [ADR-0006](docs/adr/0006-three-http-adapters.md).
 
 ## Case import (phase 1)
 
-`GET /lending` uploads applicant files. Each case is scoped with
+`GET http://localhost:8080/lending` serves the import UI (React SPA). `POST /api/lending/import` uploads
+applicant files and returns JSON. Each case is scoped with
 `{application_id}::` entity ids and an `Application` node (`CONTAINS` /
 `HAS_DOCUMENT` / `HAS_DECISION`). Sunrise remains the seed case
 (`sunrise-coffee`). A second fictional pack is `data/samples/harbor-bakery/`.
 
 ## GraphRAG retrieve (phase 2)
 
-`POST /api/lending/retrieve` and `GET /lending/retrieve` return document
-chunks, matching entities, and the `CAUSED` decision chain. Keyword search
-always runs; Qdrant is used when `QDRANT_URL` is set. No LLM generation.
+`POST /api/lending/retrieve` returns document chunks, matching entities, and
+the `CAUSED` decision chain. `GET http://localhost:8080/lending/retrieve` is the retrieve page for
+that API. Keyword search always runs; Qdrant is used when `QDRANT_URL` is
+set. No LLM generation.
 
 ## Ontology (phase 4)
 
-Checked-in OWL/SHACL lives in `ontology/`. `GET /lending/ontology` shows
-required fields and validates the live graph. Import refuses a case that
+Checked-in OWL/SHACL lives in `ontology/`. `GET /api/lending/ontology`
+returns required fields and live-graph validation; `GET http://localhost:8080/lending/ontology`
+renders that JSON. Import refuses a case that
 is missing `Decision.category` / `outcome` or `HAS_DECISION`. Neo4j gets
 the `entity_id` unique constraint; property-existence constraints are
 applied when the edition supports them (Community skips them).
 
 ## Chat (phase 3)
 
-`POST /api/lending/chat` and `GET /lending/chat` call retrieve first, then
-optionally ask Ollama (`OLLAMA_URL`) to write a short answer from that
-evidence. If Ollama is down, the page falls back to an extractive paragraph
-from the decision chain. The LLM never writes the graph, never extracts,
-and never records a decision.
+`POST /api/lending/chat` calls retrieve first, then optionally asks Ollama
+(`OLLAMA_URL`) to write a short answer from that evidence. `GET http://localhost:8080/lending/chat`
+is the chat page. If Ollama is down, the API falls back to an extractive
+paragraph from the decision chain. The LLM never writes the graph, never
+extracts, and never records a decision.
 
 ## Non-goals (v1)
 
@@ -71,6 +76,8 @@ and never records a decision.
 
 ## Decisions locked in
 
+- Design principles (Clean Architecture, DDD, SOLID as lenses):
+  [ADR-0000](docs/adr/0000-meta-design-principles.md)
 - `SEMANTICA_DISABLE_PROGRESS=1` set inside `main()`/notebook so progress
   bars do not drown the audit-trail narrative
 - Entity ids are minted as `https://example.org/lending#<slug>` at export
@@ -79,17 +86,29 @@ and never records a decision.
 - Sample documents are `.txt` (universally supported by `FileIngestor`)
 - Tests: fast unit tests run by default; the real-pipeline smoke test is
   gated behind the `integration` pytest marker
+- Frontend / backend separation: [ADR-0001](docs/adr/0001-frontend-backend-separation.md)
+  — UI in `frontend/lending/`; JSON over `/api/lending/*`
+- React + Vite + Ant Design lending-ui: [ADR-0007](docs/adr/0007-react-antd-lending-ui.md)
+- Three HTTP adapters: [ADR-0006](docs/adr/0006-three-http-adapters.md)
+- No generation on the governed path:
+  [ADR-0002](docs/adr/0002-no-generation-on-governed-path.md)
+- Runtime ContextGraph / LPG vs RDF export:
+  [ADR-0003](docs/adr/0003-runtime-graph-vs-rdf-export.md)
+- Application-scoped entity ids:
+  [ADR-0004](docs/adr/0004-application-scoped-entity-ids.md)
+- `CAUSED` Decision chain as the Audit trail:
+  [ADR-0005](docs/adr/0005-caused-decision-chain.md)
 
 ## Verification
 
-- `python demo.py` exits 0 with all seven stage banners, JSON export, and
+- `python -m demo` exits 0 with all seven stage banners, JSON export, and
   the SHACL conformance line
 - `python -m pytest tests/ -q` green; `-m integration` green
-- `demo.ipynb` executes top-to-bottom with the same results
-- Compose `admin` serves Explorer at `:8000` after Neo4j is healthy
-- `GET /lending/retrieve` answers “为什么转人工” with risk-note chunks and the
+- `demo/demo.ipynb` executes top-to-bottom with the same results
+- Compose `explorer` serves Explorer at `:8000` after `lending-api` is healthy
+- `GET http://localhost:8080/lending/retrieve` answers “为什么转人工” with risk-note chunks and the
   `risk_classification → policy_check → final_decision` CAUSED chain
-- `GET /lending/chat` answers the same question in a paragraph that names
+- `GET http://localhost:8080/lending/chat` answers the same question in a paragraph that names
   the decision chain; Ollama is optional
-- `GET /lending/ontology` reports that the live graph conforms to the
+- `GET http://localhost:8080/lending/ontology` reports that the live graph conforms to the
   Application / Decision shapes

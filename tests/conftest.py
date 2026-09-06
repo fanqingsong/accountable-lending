@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 
-# demo.py lives at the project root; make it importable from the tests dir.
+# The demo package and backend live at the project root.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))

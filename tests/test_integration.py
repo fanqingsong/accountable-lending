@@ -20,15 +20,25 @@ def test_full_pipeline_smoke():
     entities = build_result.get("entities", [])
     assert len(entities) >= 1
 
-    graph = demo.stage_graph(build_result)
+    graph = demo.stage_graph(build_result, documents)
     stats = graph.to_kg_dict().get("statistics", {})
     assert stats.get("entity_count", 0) >= 1
+    payload = graph.to_dict()
+    assert any(node.get("type") == "Application" for node in payload.get("nodes") or [])
+    assert any(
+        str(node.get("id") or "").startswith("sunrise-coffee::")
+        for node in payload.get("nodes") or []
+    )
 
     conclusions = demo.stage_reason(graph)
     assert conclusions, "expected at least one derived conclusion"
 
     decisions = demo.stage_decide(graph)
     assert set(decisions) == {"risk_classification", "policy_check", "final_decision"}
+    payload = graph.to_dict()
+    edges = payload.get("edges") or []
+    assert any(edge.get("type") == "HAS_DECISION" for edge in edges)
+    assert any(edge.get("type") == "CAUSED" for edge in edges)
 
     # the audit trail: upstream causal chain from the final decision
     chain = graph.get_causal_chain(

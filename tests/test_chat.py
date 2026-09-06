@@ -1,6 +1,6 @@
 """Chat generation tests — retrieve first, LLM only writes the sentence."""
 
-from app.chat import answer, extractive_answer, format_context, generate_answer
+from backend.chat import answer, extractive_answer, format_context, generate_answer
 
 
 class FakeGraph:
@@ -118,6 +118,23 @@ def test_answer_retrieves_before_calling_llm():
     assert result["source"] == "ollama"
     assert result["answer"] == "已转人工。"
     assert result["decisions"][0]["outcome"] == "referred_to_manual_review"
+
+
+def test_generate_answer_does_not_call_llm_without_retrieve_evidence():
+    called = []
+
+    def fake_complete(prompt, system):
+        called.append(prompt)
+        return "幻觉"
+
+    result = generate_answer(
+        "为什么转人工",
+        {"decisions": [], "chunks": [], "caused": [], "entities": []},
+        complete=fake_complete,
+    )
+    assert called == []
+    assert result["source"] == "extractive"
+    assert result["answer"] == "图谱里没有找到相关证据。"
 
 
 def test_answer_empty_query_does_not_invent():

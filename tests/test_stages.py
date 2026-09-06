@@ -1,9 +1,8 @@
-"""Tests for demo.py's stage functions, using lightweight fakes/monkeypatching.
+"""Tests for the demo package's printable adapters, using lightweight fakes.
 
-Each test fakes the graph/ingestor objects demo stages interact with, so the
-stages themselves run fast. `stage_reason` uses the real semantica Reasoner
-(it is cheap for a single rule); `stage_export` patches semantica's exporter /
-SHACL classes because they are imported *inside* the function.
+Decision / reason Implementation is tested through ``backend.pipeline``.
+`stage_export` patches semantica's exporter / SHACL classes because they are
+imported *inside* the function.
 """
 
 from datetime import datetime, timezone
@@ -18,98 +17,12 @@ from semantica.context.decision_models import Decision
 import demo
 
 
-# ---------------------------------------------------------------------------
-# stage_reason
-# ---------------------------------------------------------------------------
-
-
-class FakeReasonGraph:
-    """Minimal graph whose to_dict() exposes one coffee-related node."""
-
-    def to_dict(self):
-        return {
-            "nodes": [
-                {"id": "node-1", "content": "Sunrise Coffee Roasters LLC — specialty roaster"},
-                {"id": "node-2", "content": "Some other vendor"},
-            ]
-        }
-
-
-def test_stage_reason_derives_manual_review(capsys):
-    conclusions = demo.stage_reason(FakeReasonGraph())
+def test_stage_reason_prints_conclusions(capsys):
+    conclusions = demo.stage_reason(object(), subject="SunriseCoffeeRoasters")
 
     assert "RequiresManualReview(SunriseCoffeeRoasters)" in conclusions
     out = capsys.readouterr().out
     assert "derived: RequiresManualReview(SunriseCoffeeRoasters)" in out
-
-
-# ---------------------------------------------------------------------------
-# stage_decide
-# ---------------------------------------------------------------------------
-
-
-class FakeDecideGraph:
-    """Graph fake that records decision calls and causal edges."""
-
-    def __init__(self):
-        self.decision_calls = []
-        self.edges = []
-
-    def to_dict(self):
-        return {"nodes": [{"id": f"entity-{i}"} for i in range(8)]}
-
-    def record_decision(self, **kwargs):
-        self.decision_calls.append(kwargs)
-        return f"decision-{len(self.decision_calls)}"
-
-    def add_edge(self, source, target, edge_type, **kwargs):
-        self.edges.append((source, target, edge_type))
-
-
-def test_stage_decide_records_three_decisions_with_causal_edges():
-    graph = FakeDecideGraph()
-    decisions = demo.stage_decide(graph)
-
-    # three decisions recorded, in pipeline order
-    assert len(graph.decision_calls) == 3
-    assert [call["category"] for call in graph.decision_calls] == [
-        "risk_classification",
-        "policy_check",
-        "final_decision",
-    ]
-
-    # mapping returned: label -> decision id
-    assert set(decisions) == {"risk_classification", "policy_check", "final_decision"}
-    assert all(did.startswith("decision-") for did in decisions.values())
-
-    # two explicit edges, both CAUSED, in causal order
-    assert len(graph.edges) == 2
-    assert all(edge_type == "CAUSED" for _, _, edge_type in graph.edges)
-    (src1, tgt1, type1), (src2, tgt2, type2) = graph.edges
-    assert type1 == type2 == "CAUSED"
-    assert src1 == decisions["risk_classification"]
-    assert tgt1 == src2 == decisions["policy_check"]
-    assert tgt2 == decisions["final_decision"]
-
-
-def test_stage_decide_uses_applicant_entity_ids_and_approval_path():
-    graph = FakeDecideGraph()
-    decisions = demo.stage_decide(
-        graph,
-        applicant="Harbor Bakehouse Pvt Ltd",
-        entity_ids=["harbor::Priya"],
-        high_risk=False,
-        thin_credit=False,
-    )
-
-    assert graph.decision_calls[0]["entities"] == ["harbor::Priya"]
-    assert "Harbor Bakehouse Pvt Ltd" in graph.decision_calls[0]["scenario"]
-    assert [call["outcome"] for call in graph.decision_calls] == [
-        "standard_risk",
-        "policy_cleared",
-        "approved",
-    ]
-    assert set(decisions) == {"risk_classification", "policy_check", "final_decision"}
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +97,7 @@ def test_stage_ingest_returns_three_documents_from_data_dir(monkeypatch, capsys)
     documents = demo.stage_ingest()
 
     assert len(documents) == 3
-    assert all(isinstance(text, str) and text for text in documents)
+    assert all(item["name"].endswith(".txt") and item["text"] for item in documents)
 
     # the DATA_DIR glob ("*.txt") is respected: exactly the three real files
     assert sorted(p.name for p in fake.ingested_paths) == [

@@ -27,7 +27,7 @@ flowchart LR
     C --> G[JSON + Neo4j LPG]
     C --> H[RDF export<br/>optional]
     H --> I[SHACL]
-    G --> J[Admin UI<br/>Explorer]
+    G --> J[Explorer]
 ```
 
 | Stage | What happens | Semantica module |
@@ -47,47 +47,51 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 
-python demo.py                 # audit trail on stdout; writes exports/
-python -m app.admin            # same pipeline, then Explorer at :8000
+python -m demo                 # audit trail on stdout; writes exports/
+python -m backend.api          # JSON API at :8001 (writes the snapshot)
+python -m backend.admin        # Explorer at :8000 (loads the snapshot)
 ```
 
 Expected runtime: under a minute (the first run downloads the spaCy model).
-The admin UI needs `NEO4J_URI` only if you want the graph persisted to Neo4j;
-Explorer itself serves the in-memory / JSON graph.
+lending-api needs `NEO4J_URI` only if you want the graph persisted to Neo4j;
+Explorer itself serves the snapshot ContextGraph.
 
 ## Docker
 
 Requires [Docker](https://docs.docker.com/get-docker/) with Compose v2 (`docker compose`).
 
 ```bash
-./run.sh    # Neo4j + pipeline + admin UI
-./stop.sh   # stop containers and remove the compose stack
+./scripts/run.sh    # Neo4j + Qdrant + Ollama + three HTTP adapters
+./scripts/stop.sh   # stop containers and remove the compose stack
 ```
 
-`run.sh` downloads the spaCy model wheel into `docker/` if it is not already
-present, then starts Neo4j, Qdrant, and the admin container. First boot runs the
-lending pipeline, writes `exports/lending_graph.json` (and optional Turtle),
-MERGEs the graph into Neo4j, indexes chunks into Qdrant when available, and serves
-[Knowledge Explorer](http://localhost:8000).
+`scripts/run.sh` downloads the spaCy model wheel into `docker/` if it is not already
+present, starts Ollama and pulls `${OLLAMA_MODEL:-qwen2.5:1.5b}`, then starts Neo4j,
+Qdrant, `lending-api`, `lending-ui`, and `explorer`. First boot runs the lending
+pipeline inside lending-api, writes
+`exports/lending_graph.json` (and optional Turtle), MERGEs the graph into Neo4j,
+indexes chunks into Qdrant when available, and lets Explorer load that snapshot.
 
 | Surface | URL |
 |---|---|
-| Admin UI (Explorer) | http://localhost:8000 |
-| Case import | http://localhost:8000/lending |
-| GraphRAG retrieve (no LLM) | http://localhost:8000/lending/retrieve |
-| GraphRAG chat (LLM writes the sentence) | http://localhost:8000/lending/chat |
-| Ontology / SHACL | http://localhost:8000/lending/ontology |
+| Knowledge Explorer | http://localhost:8000 |
+| lending-api | http://localhost:8001/api/lending/applications |
+| Case import | http://localhost:8080/lending |
+| GraphRAG retrieve (no LLM) | http://localhost:8080/lending/retrieve |
+| GraphRAG chat (LLM writes the sentence) | http://localhost:8080/lending/chat |
+| Ontology / SHACL | http://localhost:8080/lending/ontology |
 | Neo4j Browser | http://localhost:7474 (user `neo4j`, password `lending-demo`) |
 
-Chat at `/lending/chat` retrieves first, then asks Ollama (`OLLAMA_URL`)
-to write a short cited answer. If the model is missing, the page still
-answers from the decision chain. Pull the default model once:
+Chat at `http://localhost:8080/lending/chat` retrieves first, then asks Ollama (`OLLAMA_URL`)
+to write a short cited answer. `./scripts/run.sh` pulls `${OLLAMA_MODEL:-qwen2.5:1.5b}`
+before the stack comes up. If the model is missing, the page still answers from
+the decision chain. To pull by hand:
 
 ```bash
 docker compose exec ollama ollama pull qwen2.5:1.5b
 ```
 
-Upload TXT / PDF / DOCX on `/lending`. Each case becomes an `Application`
+Upload TXT / PDF / DOCX on `http://localhost:8080/lending`. Each case becomes an `Application`
 node; entity ids are prefixed (`harbor-bakery::…`) so a second applicant
 cannot MERGE into Sunrise's nodes. A second fictional pack lives in
 `data/samples/harbor-bakery/`.
@@ -95,7 +99,7 @@ cannot MERGE into Sunrise's nodes. A second fictional pack lives in
 Rebuild the graph from `data/` on the next start:
 
 ```bash
-LENDING_REBUILD=1 docker compose up admin
+LENDING_REBUILD=1 docker compose up lending-api
 ```
 
 CLI-only audit trail (no UI):
@@ -105,7 +109,15 @@ docker compose --profile cli up --build --abort-on-container-exit demo
 ```
 
 The first image build takes several minutes (Semantica pulls PyTorch and the
-Explorer bundle); later runs reuse the cached image.
+Explorer bundle; `lending-ui` runs `npm ci` + Vite). Later runs reuse the
+cached images.
+
+Local Vite (API already on `:8001`):
+
+```bash
+cd frontend/lending && npm install && npm run dev
+# http://localhost:5173/lending/
+```
 
 ## What the output looks like
 
@@ -146,7 +158,7 @@ that chain, persisted as a graph:
 - the **LPG** in Neo4j (system of record) and the JSON Explorer loads,
 - the optional **RDF export** any triplestore can read, validated against shapes.
 
-Re-run `demo.py` on modified data and the pipeline produces a *different*
+Re-run `python -m demo` on modified data and the pipeline produces a *different*
 trail — same mechanics, new evidence. That is the difference between
 "the model said so" and "here is the audit trail".
 
@@ -164,14 +176,16 @@ python -m pytest tests/ -q -m integration
 ## Repository layout
 
 ```
-demo.py            the pipeline, one stage per function
-app/               admin UI (Explorer), Neo4j persist, case import
+demo/              CLI adapter (`python -m demo`) + notebook
+backend/           lending-api, Explorer adapter, persist, import, retrieve, chat
+frontend/lending/  React + Vite + Ant Design lending UI (JSON client)
 data/              seed applicant documents + samples/harbor-bakery
 ontology/          OWL + SHACL for Application / Decision
-docker/            spaCy model wheel (downloaded by run.sh)
+docker/            spaCy model wheel (downloaded by scripts/run.sh)
 Dockerfile         container image definition
-docker-compose.yml neo4j + qdrant + ollama + admin (demo is profile cli)
-run.sh / stop.sh   build-run and teardown helpers
+docker-compose.yml neo4j + qdrant + ollama + lending-api + lending-ui + explorer
+scripts/           run.sh, stop.sh, model download
+docs/screenshots/  Explorer / lending UI captures
 tests/             unit tests + integration smoke test
 exports/           generated JSON / RDF (git-ignored)
 ```

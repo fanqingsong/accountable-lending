@@ -1,6 +1,6 @@
 """GraphRAG retrieve tests — keyword + graph expansion, no Qdrant required."""
 
-from app.retrieve import expand_query, retrieve, score_text
+from backend.retrieve import expand_query, hinted_applications, retrieve, score_text
 
 
 class FakeGraph:
@@ -162,6 +162,104 @@ def test_retrieve_reads_contextgraph_properties_shape():
     )
     payload = retrieve(graph, "Sunrise 为什么转人工")
     assert payload["decisions"][0]["outcome"] == "referred_to_manual_review"
+
+
+def test_hinted_applications_reads_graph_not_baked_in_case_ids():
+    graph = FakeGraph(
+        [
+            {
+                "id": "oak-mill::application",
+                "type": "Application",
+                "content": "Oak Mill Roastery",
+                "metadata": {"application_id": "oak-mill"},
+            }
+        ],
+        [],
+    )
+    assert hinted_applications(graph, "Oak Mill 为什么转人工") == ["oak-mill"]
+    assert hinted_applications(graph, "为什么转人工") == []
+
+
+def test_retrieve_scopes_to_named_application_from_graph():
+    graph = FakeGraph(
+        [
+            {
+                "id": "sunrise-coffee::application",
+                "type": "Application",
+                "content": "Sunrise Coffee Roasters LLC",
+                "metadata": {"application_id": "sunrise-coffee"},
+            },
+            {
+                "id": "oak-mill::application",
+                "type": "Application",
+                "content": "Oak Mill Roastery",
+                "metadata": {"application_id": "oak-mill"},
+            },
+            {
+                "id": "d-sunrise",
+                "type": "decision",
+                "content": "Loan outcome for Sunrise",
+                "metadata": {
+                    "application_id": "sunrise-coffee",
+                    "category": "final_decision",
+                    "outcome": "referred_to_manual_review",
+                },
+            },
+            {
+                "id": "d-oak",
+                "type": "decision",
+                "content": "Loan outcome for Oak Mill",
+                "metadata": {
+                    "application_id": "oak-mill",
+                    "category": "final_decision",
+                    "outcome": "approved",
+                },
+            },
+        ],
+        [
+            {"source": "sunrise-coffee::application", "target": "d-sunrise", "type": "HAS_DECISION"},
+            {"source": "oak-mill::application", "target": "d-oak", "type": "HAS_DECISION"},
+        ],
+    )
+    payload = retrieve(graph, "Oak Mill 为什么转人工")
+    outcomes = {item["outcome"] for item in payload["decisions"]}
+    assert outcomes == {"approved"}
+
+
+def test_retrieve_ignores_lowercase_caused():
+    graph = FakeGraph(
+        [
+            {
+                "id": "sunrise-coffee::application",
+                "type": "Application",
+                "content": "Sunrise Coffee Roasters LLC",
+                "metadata": {"application_id": "sunrise-coffee"},
+            },
+            {
+                "id": "d-risk",
+                "type": "decision",
+                "content": "Loan application",
+                "metadata": {
+                    "application_id": "sunrise-coffee",
+                    "category": "risk_classification",
+                    "outcome": "high_risk",
+                },
+            },
+            {
+                "id": "d-final",
+                "type": "decision",
+                "content": "Loan outcome",
+                "metadata": {
+                    "application_id": "sunrise-coffee",
+                    "category": "final_decision",
+                    "outcome": "referred_to_manual_review",
+                },
+            },
+        ],
+        [{"source": "d-risk", "target": "d-final", "type": "caused"}],
+    )
+    payload = retrieve(graph, "Sunrise 为什么转人工")
+    assert payload["caused"] == []
 
 
 def test_retrieve_empty_query_is_empty():
