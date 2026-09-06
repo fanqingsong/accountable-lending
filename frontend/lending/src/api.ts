@@ -40,6 +40,7 @@ export type RetrievePayload = {
 export type ChatPayload = RetrievePayload & {
   answer?: string;
   source?: string;
+  generation_error?: string;
   error?: string;
 };
 
@@ -96,10 +97,7 @@ export type OntologyPayload = {
   };
 };
 
-const API_BASE = String(import.meta.env.VITE_LENDING_API_BASE || "http://localhost:8001").replace(
-  /\/$/,
-  "",
-);
+const API_BASE = String(import.meta.env.VITE_LENDING_API_BASE ?? "").replace(/\/$/, "");
 
 export const EXPLORER_URL = String(
   import.meta.env.VITE_LENDING_EXPLORER_URL || "http://localhost:8000",
@@ -110,7 +108,12 @@ export function lendingApi(path: string): string {
 }
 
 async function readJson<T>(response: Response): Promise<T> {
-  return (await response.json()) as T;
+  const text = await response.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`接口返回了 HTML（HTTP ${response.status}），不是 JSON。`);
+  }
 }
 
 export async function listApplications(): Promise<ApplicationRow[]> {

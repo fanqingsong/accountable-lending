@@ -19,11 +19,11 @@ CompleteFn = Callable[[str, str], str]
 
 
 def _ollama_timeout() -> float:
-    raw = os.environ.get("OLLAMA_TIMEOUT", "12")
+    raw = os.environ.get("OLLAMA_TIMEOUT", "180")
     try:
         return max(2.0, float(raw))
     except ValueError:
-        return 12.0
+        return 180.0
 
 
 def format_context(payload: Dict[str, Any], max_chars: int = 2400) -> str:
@@ -113,6 +113,13 @@ def generate_answer(query: str, payload: Dict[str, Any], complete: Optional[Comp
         if generated:
             text = generated
             source = "ollama"
+        else:
+            return {
+                "answer": text,
+                "source": source,
+                "context": context,
+                "generation_error": "empty model output",
+            }
     return {"answer": text, "source": source, "context": context}
 
 
@@ -124,6 +131,7 @@ def answer(graph, query: str, store=None, complete: Optional[CompleteFn] = None)
         complete = ollama_complete
     try:
         generated = generate_answer(query, payload, complete=complete)
-    except (urllib.error.URLError, TimeoutError, RuntimeError, OSError, ValueError):
+    except (urllib.error.URLError, TimeoutError, RuntimeError, OSError, ValueError) as exc:
         generated = generate_answer(query, payload, complete=None)
+        generated["generation_error"] = str(exc) or exc.__class__.__name__
     return {**payload, **generated}

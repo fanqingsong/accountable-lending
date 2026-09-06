@@ -4,7 +4,7 @@ ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
 COPY lending/package.json lending/package-lock.json ./
 RUN npm ci
 COPY lending/ ./
-ARG VITE_LENDING_API_BASE=http://localhost:8001
+ARG VITE_LENDING_API_BASE=
 ARG VITE_LENDING_EXPLORER_URL=http://localhost:8000
 ENV VITE_LENDING_API_BASE=$VITE_LENDING_API_BASE
 ENV VITE_LENDING_EXPLORER_URL=$VITE_LENDING_EXPLORER_URL

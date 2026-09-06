@@ -89,6 +89,14 @@ def test_generate_answer_uses_retrieve_context_not_free_invention():
 def test_generate_answer_falls_back_when_complete_missing():
     result = generate_answer("Sunrise 为什么转人工", _payload(), complete=None)
     assert result["source"] == "extractive"
+    assert "generation_error" not in result
+    assert "referred_to_manual_review" in result["answer"]
+
+
+def test_generate_answer_records_empty_model_output():
+    result = generate_answer("Sunrise 为什么转人工", _payload(), complete=lambda prompt, system: "")
+    assert result["source"] == "extractive"
+    assert result["generation_error"] == "empty model output"
     assert "referred_to_manual_review" in result["answer"]
 
 
@@ -149,3 +157,37 @@ def test_answer_empty_query_does_not_invent():
     result = answer(FakeGraph([], []), "   ", complete=lambda prompt, system: "幻觉")
     assert result["answer"] == "图谱里没有找到相关证据。"
     assert result["source"] == "extractive"
+    assert "generation_error" not in result
+
+
+def test_answer_falls_back_when_complete_times_out():
+    graph = FakeGraph(
+        [
+            {
+                "id": "sunrise-coffee::application",
+                "type": "Application",
+                "content": "Sunrise Coffee Roasters LLC",
+                "metadata": {"application_id": "sunrise-coffee"},
+            },
+            {
+                "id": "d-final",
+                "type": "decision",
+                "content": "Loan outcome",
+                "metadata": {
+                    "application_id": "sunrise-coffee",
+                    "category": "final_decision",
+                    "outcome": "referred_to_manual_review",
+                    "reasoning": "routed to the manual review queue",
+                },
+            },
+        ],
+        [{"source": "sunrise-coffee::application", "target": "d-final", "type": "HAS_DECISION"}],
+    )
+
+    def boom(prompt, system):
+        raise TimeoutError("timed out")
+
+    result = answer(graph, "Sunrise 为什么转人工", complete=boom)
+    assert result["source"] == "extractive"
+    assert result["generation_error"] == "timed out"
+    assert "referred_to_manual_review" in result["answer"]

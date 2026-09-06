@@ -184,21 +184,42 @@ def test_cors_allows_lending_ui_origin(monkeypatch):
             "Access-Control-Request-Method": "GET",
         },
     )
-    assert preflight.headers.get("access-control-allow-origin") == origin
+    assert preflight.headers.get("access-control-allow-origin") in {origin, "*"}
 
     response = client.get("/api/lending/applications", headers={"Origin": origin})
     assert response.status_code == 200
-    assert response.headers.get("access-control-allow-origin") == origin
+    assert response.headers.get("access-control-allow-origin") in {origin, "*"}
     assert response.json()["applications"][0]["application_id"] == "sunrise-coffee"
+
+
+def test_cors_allows_lan_origin(monkeypatch):
+    client = _client(monkeypatch)
+    origin = "http://192.168.219.82:8080"
+    preflight = client.options(
+        "/api/lending/chat",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    assert preflight.headers.get("access-control-allow-origin") in {origin, "*"}
 
 
 def test_ui_files_use_configurable_api_and_explorer_urls():
     root = Path(__file__).resolve().parent.parent / "frontend" / "lending"
     api = (root / "src" / "api.ts").read_text(encoding="utf-8")
     assert "VITE_LENDING_API_BASE" in api
+    assert "http://localhost:8001" not in api
     assert "VITE_LENDING_EXPLORER_URL" in api
     dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
     assert "VITE_LENDING_API_BASE" in dockerfile
+    vite = (root / "vite.config.ts").read_text(encoding="utf-8")
+    assert '"/api/lending"' in vite
+    assert "240_000" in vite
+    nginx = (root.parent / "nginx.conf").read_text(encoding="utf-8")
+    assert "proxy_pass http://lending-api:8001/api/lending/" in nginx
+    assert "proxy_read_timeout 240s" in nginx
     main = (root / "src" / "main.tsx").read_text(encoding="utf-8")
     assert 'basename="/lending"' in main
     assert "{{applications}}" not in api

@@ -18,6 +18,8 @@ export function labelOf(map: Record<string, string>, key?: string): string {
   return map[key] || key;
 }
 
-export function sourceLabel(source?: string): string {
-  return source === "ollama" ? "Ollama 成文" : "图谱摘录 · 未调用模型";
+export function sourceLabel(source?: string, generationError?: string): string {
+  if (source === "ollama") return "Ollama 成文";
+  if (generationError) return "成文失败 · 已回退图谱摘录";
+  return "图谱摘录 · 未调用模型";
 }

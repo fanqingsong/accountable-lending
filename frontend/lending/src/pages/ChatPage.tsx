@@ -91,7 +91,9 @@ export function ChatPage() {
               ];
               return (
                 <div key={index} className="audit-turn">
-                  <div className="audit-q">{sourceLabel(turn.payload?.source)}</div>
+                  <div className="audit-q">
+                    {sourceLabel(turn.payload?.source, turn.payload?.generation_error)}
+                  </div>
                   <div className="audit-a">{turn.payload?.answer}</div>
                   <Space wrap style={{ marginTop: 8 }}>
                     {cites.map((item) => (
@@ -141,7 +143,9 @@ export function ChatPage() {
       <aside className="audit-panel">
         {evidence ? (
           <>
-            <div className="evidence-meta">{sourceLabel(evidence.source)}</div>
+            <div className="evidence-meta">
+              {sourceLabel(evidence.source, evidence.generation_error)}
+            </div>
             <Typography.Title level={4}>决策链</Typography.Title>
             <DecisionChain decisions={evidence.decisions} caused={evidence.caused} focusId={focus} />
             <EvidenceBlocks chunks={evidence.chunks} entities={evidence.entities} focusId={focus} />
