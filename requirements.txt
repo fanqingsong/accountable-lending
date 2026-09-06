@@ -2,7 +2,7 @@
 semantica[shacl,explorer,graph-neo4j]>=0.6.6
 qdrant-client>=1.9
 spacy>=3.7
-prefect>=3,<4
+prefect==3.8.5
 
 # The spaCy model used by local (no-LLM) entity extraction:
 #   python -m spacy download en_core_web_sm
