@@ -39,7 +39,14 @@ def expand_query(query: str) -> str:
 
 def query_terms(query: str) -> List[str]:
     expanded = expand_query(query)
-    return [term for term in re.split(r"\s+", expanded.lower()) if len(term) > 1]
+    terms: List[str] = []
+    for part in re.split(r"\s+", expanded.lower()):
+        if len(part) > 1 and part not in terms:
+            terms.append(part)
+        for sub in re.split(r"[-_]+", part):
+            if len(sub) > 1 and sub not in terms:
+                terms.append(sub)
+    return terms
 
 
 def _metadata(node: Dict[str, Any]) -> Dict[str, Any]:
@@ -310,6 +317,37 @@ def related_decisions(graph, application_ids: List[str], mapping: Dict[str, str]
     }
 
 
+def document_hits_for_applications(
+    graph, application_ids: List[str], mapping: Dict[str, str] | None = None
+) -> List[Dict[str, Any]]:
+    """Return Document chunks for named Applications even when the query is only an id."""
+    wanted = set(application_ids)
+    if not wanted:
+        return []
+    nodes, _ = _nodes_edges(graph)
+    hits = []
+    for node in nodes:
+        if str(node.get("type") or "") != "Document":
+            continue
+        app_id = application_id_of(node, mapping)
+        if app_id not in wanted:
+            continue
+        text = node_text(node)
+        if not text.strip():
+            continue
+        hits.append(
+            {
+                "id": node.get("id"),
+                "kind": "Document",
+                "text": text[:800],
+                "score": 1.0,
+                "source": "application",
+                "application_id": app_id,
+            }
+        )
+    return hits
+
+
 def related_entities(graph, application_ids: List[str], terms: List[str], limit: int = 12, mapping: Dict[str, str] | None = None) -> List[Dict[str, Any]]:
     nodes, _ = _nodes_edges(graph)
     wanted = set(application_ids)
@@ -324,7 +362,7 @@ def related_entities(graph, application_ids: List[str], terms: List[str], limit:
         text = str(node.get("content") or node.get("id") or "")
         display = text.split("::", 1)[-1] if "::" in text else text
         score = score_text(display, terms)
-        if score <= 0:
+        if score <= 0 and not wanted:
             continue
         scored.append(
             {
@@ -353,6 +391,12 @@ def retrieve(graph, query: str, store=None, limit: int = 8) -> Dict[str, Any]:
         limit,
     )
     hinted = hinted_applications(graph, query)
+    if hinted:
+        chunks = _merge_hits(
+            chunks,
+            document_hits_for_applications(graph, hinted, mapping),
+            limit,
+        )
     app_ids = list(hinted)
     if not app_ids:
         for hit in chunks:

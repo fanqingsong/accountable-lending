@@ -54,12 +54,15 @@ set. No LLM generation.
 
 ## Ontology (phase 4)
 
-Checked-in OWL/SHACL lives in `ontology/`. `GET /api/lending/ontology`
-returns required fields and live-graph validation; `GET http://localhost:8080/lending/ontology`
-renders that JSON. Import refuses a case that
-is missing `Decision.category` / `outcome` or `HAS_DECISION`. Neo4j gets
-the `entity_id` unique constraint; property-existence constraints are
-applied when the edition supports them (Community skips them).
+`ontology/lending.json` is the schema source of truth
+([ADR-0008](docs/adr/0008-ontology-single-source.md)). OWL/SHACL are
+projections. `GET /api/lending/ontology` returns that JSON, generated
+Turtle, and live-graph validation; `GET http://localhost:8080/lending/ontology`
+renders it. Import refuses a case that fails the JSON required fields /
+relationships (today: `Decision.category` / `outcome` and `HAS_DECISION`).
+Neo4j gets the `entity_id` unique constraint; property-existence
+constraints follow the same required fields when the edition supports
+them (Community skips them).
 
 ## Chat (phase 3)
 
@@ -98,6 +101,8 @@ extracts, and never records a decision.
   [ADR-0004](docs/adr/0004-application-scoped-entity-ids.md)
 - `CAUSED` Decision chain as the Audit trail:
   [ADR-0005](docs/adr/0005-caused-decision-chain.md)
+- Ontology JSON as schema source of truth:
+  [ADR-0008](docs/adr/0008-ontology-single-source.md)
 
 ## Verification
 

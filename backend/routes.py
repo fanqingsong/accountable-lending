@@ -4,6 +4,7 @@ This module must not use postponed annotations so FastAPI can resolve
 ``Request`` at route-registration time. It does not compose HTML.
 """
 
+import asyncio
 import os
 
 from fastapi import Request
@@ -83,7 +84,7 @@ def attach_lending_routes(app, session, vector_store=None):
     async def chat_api(request: Request):
         body = await request.json()
         query = str(body.get("query") or "")
-        return answer(session.graph, query, store=_store(vector_store))
+        return await asyncio.to_thread(answer, session.graph, query, _store(vector_store))
 
     async def ontology_api():
         return {**schema_public(), "validation": validate_graph(session.graph)}

@@ -51,20 +51,46 @@ export type ImportResult = {
   error?: string;
 };
 
+export type OntologyClass = {
+  name?: string;
+  description?: string;
+};
+
 export type OntologyProperty = {
   domain?: string;
   name?: string;
+  range?: string;
   required?: boolean;
   description?: string;
 };
 
+export type OntologyRelationship = {
+  name?: string;
+  domain?: string;
+  range?: string;
+  required?: boolean;
+  description?: string;
+};
+
+export type OntologyViolation = {
+  id?: string;
+  type?: string;
+  field?: string;
+  message?: string;
+};
+
 export type OntologyPayload = {
-  ontology?: { properties?: OntologyProperty[] };
+  ontology?: {
+    classes?: OntologyClass[];
+    properties?: OntologyProperty[];
+    relationships?: OntologyRelationship[];
+  };
+  owl?: string;
   shacl?: string;
   validation?: {
     conforms?: boolean;
     checked?: number | string;
-    violations?: { id?: string; message?: string }[];
+    violations?: OntologyViolation[];
   };
 };
 

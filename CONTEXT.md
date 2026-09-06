@@ -78,6 +78,10 @@ _Avoid_: SPARQL as a substitute for retrieve
 Turtle / SHACL produced after the graph exists. RDF IRIs are minted only at export as `https://example.org/lending#<slug>`.
 _Avoid_: RDF as the runtime store, free-text ids as RDF subjects
 
+**lending schema**:
+Required Application / Decision fields and required relationships, defined only in `ontology/lending.json` ([ADR-0008](docs/adr/0008-ontology-single-source.md)). OWL/SHACL are projections. Import validation reads this file.
+_Avoid_: a second required-field list in Python; OWL as the live editor
+
 ## Relationships
 
 - An **Application** has exactly one **application_id**.

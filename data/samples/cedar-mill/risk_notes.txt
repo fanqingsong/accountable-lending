@@ -1,0 +1,13 @@
+# Risk Notes — Cedar Mill Furniture Pvt Ltd
+
+Underwriter notes from the first-pass review:
+
+- Revenue concentration: Northline Home Stores alone contributes 41% of revenue.
+  Loss of this buyer would cut the debt-service coverage ratio below 1.1x.
+- External repayment record exists: ICICI term loan since 2022, no arrears.
+  Credit history is not thin.
+- The founders, Rohan Mehta and Kavita Iyer, have no prior defaults and
+  carry personal credit scores above 765.
+- Aravalli Timber reports that Cedar Mill Furniture has paid on time for
+  every delivery since 2020.
+- Policy 7.3 does not trigger: HighRiskFlag is present, ThinCreditHistory is not.

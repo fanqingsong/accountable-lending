@@ -18,7 +18,15 @@ SYSTEM_PROMPT = (
 CompleteFn = Callable[[str, str], str]
 
 
-def format_context(payload: Dict[str, Any]) -> str:
+def _ollama_timeout() -> float:
+    raw = os.environ.get("OLLAMA_TIMEOUT", "12")
+    try:
+        return max(2.0, float(raw))
+    except ValueError:
+        return 12.0
+
+
+def format_context(payload: Dict[str, Any], max_chars: int = 2400) -> str:
     lines = []
     for decision in payload.get("decisions") or []:
         lines.append(
@@ -29,10 +37,14 @@ def format_context(payload: Dict[str, Any]) -> str:
     for link in payload.get("caused") or []:
         lines.append(f"CAUSED {link.get('from')} -> {link.get('to')}")
     for hit in payload.get("chunks") or []:
-        lines.append(f"CHUNK [{hit.get('kind')}] {hit.get('text')}")
+        text = str(hit.get("text") or "")[:400]
+        lines.append(f"CHUNK [{hit.get('kind')}] {text}")
     for entity in payload.get("entities") or []:
         lines.append(f"ENTITY {entity.get('text')} ({entity.get('type')})")
-    return "\n".join(lines).strip()
+    context = "\n".join(lines).strip()
+    if len(context) > max_chars:
+        return context[:max_chars]
+    return context
 
 
 def extractive_answer(payload: Dict[str, Any]) -> str:
@@ -66,7 +78,8 @@ def ollama_complete(prompt: str, system: str) -> str:
     url = os.environ.get("OLLAMA_URL", "").strip()
     if not url:
         raise RuntimeError("OLLAMA_URL is not set")
-    urllib.request.urlopen(url.rstrip("/") + "/api/tags", timeout=2).read()
+    timeout = _ollama_timeout()
+    urllib.request.urlopen(url.rstrip("/") + "/api/tags", timeout=min(2.0, timeout)).read()
     model = os.environ.get("OLLAMA_MODEL", "qwen2.5:1.5b")
     body = json.dumps(
         {
@@ -84,7 +97,7 @@ def ollama_complete(prompt: str, system: str) -> str:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=90) as response:
+    with urllib.request.urlopen(request, timeout=timeout) as response:
         data = json.loads(response.read().decode("utf-8"))
     message = data.get("message") or {}
     return str(message.get("content") or data.get("response") or "").strip()

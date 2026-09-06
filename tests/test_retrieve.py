@@ -1,6 +1,6 @@
 """GraphRAG retrieve tests — keyword + graph expansion, no Qdrant required."""
 
-from backend.retrieve import expand_query, hinted_applications, retrieve, score_text
+from backend.retrieve import expand_query, hinted_applications, query_terms, retrieve, score_text
 
 
 class FakeGraph:
@@ -162,6 +162,63 @@ def test_retrieve_reads_contextgraph_properties_shape():
     )
     payload = retrieve(graph, "Sunrise 为什么转人工")
     assert payload["decisions"][0]["outcome"] == "referred_to_manual_review"
+
+
+def test_query_terms_splits_hyphenated_application_id():
+    terms = query_terms("cedar-mill")
+    assert "cedar-mill" in terms
+    assert "cedar" in terms
+    assert "mill" in terms
+
+
+def test_retrieve_application_id_returns_documents_and_entities():
+    graph = FakeGraph(
+        [
+            {
+                "id": "cedar-mill::application",
+                "type": "Application",
+                "content": "cedar-mill",
+                "metadata": {"application_id": "cedar-mill"},
+            },
+            {
+                "id": "cedar-mill::doc::risk_notes.txt",
+                "type": "Document",
+                "content": "risk_notes.txt",
+                "metadata": {
+                    "application_id": "cedar-mill",
+                    "body": "Cedar Mill Furniture. Northline Home Stores 41%.",
+                },
+            },
+            {
+                "id": "cedar-mill::Rohan Mehta",
+                "type": "PERSON",
+                "content": "Rohan Mehta",
+                "metadata": {"application_id": "cedar-mill"},
+            },
+            {
+                "id": "d-final",
+                "type": "decision",
+                "content": "Loan outcome for cedar-mill",
+                "metadata": {
+                    "application_id": "cedar-mill",
+                    "category": "final_decision",
+                    "outcome": "approved",
+                },
+            },
+        ],
+        [
+            {"source": "cedar-mill::application", "target": "d-final", "type": "HAS_DECISION"},
+            {
+                "source": "cedar-mill::application",
+                "target": "cedar-mill::doc::risk_notes.txt",
+                "type": "HAS_DOCUMENT",
+            },
+        ],
+    )
+    payload = retrieve(graph, "cedar-mill")
+    assert any(hit["kind"] == "Document" for hit in payload["chunks"])
+    assert any("Cedar Mill Furniture" in (hit["text"] or "") for hit in payload["chunks"])
+    assert any(item["text"] == "Rohan Mehta" for item in payload["entities"])
 
 
 def test_hinted_applications_reads_graph_not_baked_in_case_ids():

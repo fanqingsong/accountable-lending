@@ -61,6 +61,8 @@ Dependencies point inward: `python -m demo` and HTTP import call `backend.pipeli
   Explorer.
 - [ADR-0007](docs/adr/0007-react-antd-lending-ui.md) — React + Vite + Ant Design
   SPA for lending-ui.
+- [ADR-0008](docs/adr/0008-ontology-single-source.md) — `ontology/lending.json`
+  is the schema source of truth; OWL/SHACL are projections.
 
 ## Layout
 
@@ -74,12 +76,12 @@ Dependencies point inward: `python -m demo` and HTTP import call `backend.pipeli
 | `backend/import_service.py` | Upload TXT/PDF/DOCX/MD; refuse duplicate `application_id` |
 | `backend/retrieve.py` | Chunks + entities + `CAUSED` chain |
 | `backend/chat.py` | Retrieve first, then optional Ollama |
-| `backend/ontology.py` | OWL/SHACL from `ontology/`; import requires `Decision.category` / `outcome` and `HAS_DECISION` |
+| `backend/ontology.py` | Reads `ontology/lending.json` (ADR-0008); import validates required fields / relationships from that file |
 | `backend/stores.py` | Neo4j MERGE + constraints (`entity_id` unique; property existence when edition allows) |
 | `frontend/lending/` | React + Vite + Ant Design SPA (import / retrieve / chat / ontology). Calls the JSON API. Compose builds `dist`; nginx serves it. |
 | `data/*.txt` | Seed Sunrise documents (`FileIngestor` reads these) |
 | `data/samples/harbor-bakery/` | Second fictional pack |
-| `ontology/` | `lending.json` + OWL/SHACL |
+| `ontology/` | `lending.json` (schema source of truth) + OWL/SHACL projections |
 | `exports/` | Generated JSON/RDF/uploads — git-ignored |
 | `tests/` | Fast unit tests default; real pipeline behind `integration` marker |
 | `scripts/` | Host helpers: `run.sh`, `stop.sh`, spaCy wheel download. Not a home for domain code. |
@@ -120,9 +122,10 @@ Use these names. Do not rename them to "service", "handler", or "agent step".
 - **LPG** — Neo4j system of record when `NEO4J_URI` is set
 - **Audit trail** — `get_causal_chain(direction="upstream")` plus precedents
 
-Required schema (see `ontology/lending.json`): `Application.application_id`,
-`Decision.category`, `Decision.outcome`, `HAS_DECISION`. Optional:
-`HAS_DOCUMENT`, `CAUSED`.
+Required schema is `ontology/lending.json` only ([ADR-0008](docs/adr/0008-ontology-single-source.md)).
+Today that file requires `Application.application_id`, `Decision.category`,
+`Decision.outcome`, and `HAS_DECISION`. Optional there: `HAS_DOCUMENT`,
+`CAUSED`. Do not keep a second required-field list in Python.
 
 ## Coding conventions
 

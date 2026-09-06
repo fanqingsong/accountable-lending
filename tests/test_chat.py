@@ -55,6 +55,14 @@ def test_format_context_includes_chain_and_evidence():
     assert "CAUSED d-risk -> d-policy" in context
 
 
+def test_format_context_truncates_long_document_bodies():
+    payload = _payload()
+    payload["chunks"] = [{"kind": "Document", "text": "Cedar Mill " + ("x" * 5000)}]
+    context = format_context(payload)
+    assert "high_risk" in context
+    assert len(context) <= 2400
+
+
 def test_extractive_answer_names_the_decision_chain():
     text = extractive_answer(_payload())
     assert "risk_classification=high_risk" in text

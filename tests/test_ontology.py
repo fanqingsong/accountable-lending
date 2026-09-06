@@ -1,6 +1,16 @@
 """Schema validation and Neo4j constraint helpers."""
 
-from backend.ontology import apply_schema_constraints, validate_graph
+from backend.ontology import (
+    OWL_TTL,
+    SHACL_TTL,
+    apply_schema_constraints,
+    neo4j_constraints,
+    render_owl,
+    render_shacl,
+    required_fields,
+    required_relationships,
+    validate_graph,
+)
 
 
 class FakeGraph:
@@ -28,6 +38,29 @@ def _valid_sunrise():
         ],
         [{"source": "sunrise-coffee::application", "target": "d-final", "type": "HAS_DECISION"}],
     )
+
+
+def test_required_shape_comes_from_json():
+    assert required_fields()["Application"] == ["application_id"]
+    assert required_fields()["Decision"] == ["category", "outcome"]
+    assert required_fields()["decision"] == ["category", "outcome"]
+    names = [item["name"] for item in required_relationships()]
+    assert names == ["HAS_DECISION"]
+
+
+def test_projections_match_checked_in_turtle():
+    assert OWL_TTL.read_text(encoding="utf-8") == render_owl()
+    assert SHACL_TTL.read_text(encoding="utf-8") == render_shacl()
+
+
+def test_neo4j_property_constraints_follow_required_fields():
+    names = [name for name, _cypher in neo4j_constraints()]
+    assert names == [
+        "lending_entity_id",
+        "application_id",
+        "decision_category",
+        "decision_outcome",
+    ]
 
 
 def test_validate_graph_accepts_complete_case():

@@ -188,3 +188,5 @@ def test_ontology_api_includes_validation(monkeypatch):
     assert "ontology" in body
     assert "validation" in body
     assert "shacl" in body
+    assert "classes" in body["ontology"]
+    assert "relationships" in body["ontology"]
